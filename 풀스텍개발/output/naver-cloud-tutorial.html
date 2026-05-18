@@ -141,8 +141,27 @@ pre .cmd{color:#79c0ff}
 .star{font-size:32px;opacity:.3;transition:opacity .3s}
 .star.lit{opacity:1}
 /* NOTES */
-.note{background:#1c2128;border-left:3px solid var(--warn);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0 8px 30px;font-size:12px;color:var(--text2);line-height:1.6}
-.note strong{color:var(--warn)}
+.note{background:#1c2128;border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0 8px 30px;font-size:12px;color:var(--text2);line-height:1.7}
+.note strong{color:var(--accent)}
+.note.warn{border-left-color:var(--warn);background:#2a1f0f}
+.note.warn strong{color:var(--warn)}
+.note.danger{border-left-color:var(--danger);background:#2a1316}
+.note.danger strong{color:var(--danger)}
+.note.tip{border-left-color:#79c0ff;background:#0c1b2e}
+.note.tip strong{color:#79c0ff}
+/* MISSION SUMMARY */
+.mission-summary{background:linear-gradient(135deg,#1c2128 0%,#161b22 100%);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;padding:18px 22px;margin-bottom:24px;display:flex;gap:18px;align-items:flex-start}
+.mission-summary.aws-mode{border-left-color:var(--aws)}
+.mission-summary-icon{font-size:36px;flex-shrink:0;line-height:1}
+.mission-summary-body{flex:1;min-width:0}
+.mission-summary h3{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;font-weight:700}
+.mission-summary.aws-mode h3{color:var(--aws)}
+.mission-summary-text{font-size:14px;line-height:1.75;color:var(--text)}
+.mission-summary-points{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.summary-point{background:#0d1117;border:1px solid var(--border);padding:3px 10px;border-radius:14px;font-size:11px;color:var(--text2)}
+/* GUIDE STEP ENHANCEMENT */
+.guide-step{background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:14px 16px;margin-bottom:14px;transition:border-color .15s}
+.guide-step:hover{border-color:#30363d}
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -516,9 +535,13 @@ function getInstallCommands() {
     ? `sudo dnf install -y java-17-openjdk`
     : `sudo apt install -y openjdk-17-jdk`;
 
+  const javaHome = isRocky
+    ? '/usr/lib/jvm/java-17-openjdk'
+    : '/usr/lib/jvm/java-17-openjdk-amd64';
+
   const wasInstall = was === 'tomcat'
-    ? `${javaInstall}\n\ncd /opt\nsudo wget https://downloads.apache.org/tomcat/tomcat-10/v10.1.28/bin/apache-tomcat-10.1.28.tar.gz\nsudo tar -xzf apache-tomcat-10.1.28.tar.gz\nsudo mv apache-tomcat-10.1.28 tomcat\nsudo useradd -r -m -U -d /opt/tomcat -s /bin/false tomcat\nsudo chown -R tomcat: /opt/tomcat\n# Tomcat 시작\nsudo /opt/tomcat/bin/startup.sh`
-    : `${javaInstall}\n\ncd /opt\nsudo wget https://github.com/wildfly/wildfly/releases/download/31.0.0.Final/wildfly-31.0.0.Final.tar.gz\nsudo tar -xzf wildfly-31.0.0.Final.tar.gz\nsudo mv wildfly-31.0.0.Final wildfly\nsudo useradd -r -s /sbin/nologin wildfly\nsudo chown -R wildfly: /opt/wildfly\n# WildFly 시작\nsudo /opt/wildfly/bin/standalone.sh -b 0.0.0.0`;
+    ? `${javaInstall}\n\n# Tomcat 다운로드 및 설치\ncd /opt\nsudo wget https://downloads.apache.org/tomcat/tomcat-10/v10.1.28/bin/apache-tomcat-10.1.28.tar.gz\nsudo tar -xzf apache-tomcat-10.1.28.tar.gz\nsudo mv apache-tomcat-10.1.28 tomcat\nsudo useradd -r -m -U -d /opt/tomcat -s /bin/false tomcat\nsudo chown -R tomcat: /opt/tomcat\n\n# systemd 서비스 등록 (재부팅 시 자동 실행)\nsudo tee /etc/systemd/system/tomcat.service << 'EOF'\n[Unit]\nDescription=Apache Tomcat 10\nAfter=network.target\n\n[Service]\nType=forking\nUser=tomcat\nGroup=tomcat\nEnvironment="JAVA_HOME=${javaHome}"\nEnvironment="CATALINA_HOME=/opt/tomcat"\nEnvironment="CATALINA_BASE=/opt/tomcat"\nExecStart=/opt/tomcat/bin/startup.sh\nExecStop=/opt/tomcat/bin/shutdown.sh\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\nEOF\nsudo systemctl daemon-reload\nsudo systemctl enable --now tomcat\nsudo systemctl status tomcat --no-pager`
+    : `${javaInstall}\n\n# WildFly 다운로드 및 설치\ncd /opt\nsudo wget https://github.com/wildfly/wildfly/releases/download/31.0.0.Final/wildfly-31.0.0.Final.tar.gz\nsudo tar -xzf wildfly-31.0.0.Final.tar.gz\nsudo mv wildfly-31.0.0.Final wildfly\nsudo useradd -r -s /sbin/nologin wildfly\nsudo chown -R wildfly: /opt/wildfly\n\n# systemd 서비스 등록\nsudo tee /etc/systemd/system/wildfly.service << 'EOF'\n[Unit]\nDescription=WildFly Application Server\nAfter=network.target\n\n[Service]\nType=simple\nUser=wildfly\nGroup=wildfly\nEnvironment="JAVA_HOME=${javaHome}"\nExecStart=/opt/wildfly/bin/standalone.sh -b 0.0.0.0\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\nEOF\nsudo systemctl daemon-reload\nsudo systemctl enable --now wildfly`;
 
   let dbInstall = '';
   if (db === 'mysql') {
@@ -535,12 +558,14 @@ function getInstallCommands() {
       : `sudo apt install -y mariadb-server\nsudo mysql_secure_installation`;
   }
 
+  const tomcatAjpEnable = `# [WAS 서버] Tomcat 10은 AJP 커넥터가 기본 비활성화 — 명시적 활성화 필요\n# /opt/tomcat/conf/server.xml의 AJP Connector 주석을 해제 후 secret 추가\nsudo tee /tmp/ajp-patch.py << 'PYEOF'\nimport re, sys\np = '/opt/tomcat/conf/server.xml'\ns = open(p).read()\nnew = '<Connector protocol="AJP/1.3" address="0.0.0.0" port="8009" redirectPort="8443" secretRequired="true" secret="MySecretKey123!" />'\n# 기존 AJP 주석 블록 제거\ns = re.sub(r'<!--\\s*<Connector[^>]*AJP/1\\.3[^>]*/>\\s*-->', new, s)\nif new not in s:\n    s = s.replace('</Service>', '    ' + new + '\\n</Service>')\nopen(p,'w').write(s)\nPYEOF\nsudo python3 /tmp/ajp-patch.py\nsudo systemctl restart tomcat`;
+
   const integrationCmd = was === 'tomcat'
     ? (web === 'apache'
         ? (isRocky
-            ? `# AJP 연동 설정 (Rocky Linux)\ncat << 'EOF' | sudo tee /etc/httpd/conf.d/tomcat.conf\n<VirtualHost *:80>\n    ProxyPreserveHost On\n    ProxyPass / ajp://WAS_PRIVATE_IP:8009/\n    ProxyPassReverse / ajp://WAS_PRIVATE_IP:8009/\n</VirtualHost>\nEOF\nsudo systemctl restart httpd`
-            : `# AJP 연동 설정 (Ubuntu)\nsudo a2enmod proxy_ajp\ncat << 'EOF' | sudo tee /etc/apache2/sites-available/tomcat.conf\n<VirtualHost *:80>\n    ProxyPreserveHost On\n    ProxyPass / ajp://WAS_PRIVATE_IP:8009/\n    ProxyPassReverse / ajp://WAS_PRIVATE_IP:8009/\n</VirtualHost>\nEOF\nsudo a2ensite tomcat.conf\nsudo systemctl restart apache2`)
-        : `# Nginx Reverse Proxy 설정\ncat << 'EOF' | sudo tee /etc/nginx/conf.d/tomcat.conf\nupstream tomcat_backend {\n    server WAS_PRIVATE_IP:8080;\n}\nserver {\n    listen 80;\n    server_name your_domain.com;\n    location / {\n        proxy_pass http://tomcat_backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n    }\n}\nEOF\nsudo nginx -t && sudo systemctl restart nginx`)
+            ? `${tomcatAjpEnable}\n\n# [Web 서버] Apache → Tomcat AJP 프록시 설정 (Rocky Linux)\ncat << 'EOF' | sudo tee /etc/httpd/conf.d/tomcat.conf\n<VirtualHost *:80>\n    ProxyPreserveHost On\n    <Proxy *>\n        Require all granted\n    </Proxy>\n    ProxyPass / ajp://WAS_PRIVATE_IP:8009/ secret=MySecretKey123!\n    ProxyPassReverse / ajp://WAS_PRIVATE_IP:8009/\n</VirtualHost>\nEOF\nsudo systemctl restart httpd`
+            : `${tomcatAjpEnable}\n\n# [Web 서버] Apache → Tomcat AJP 프록시 설정 (Ubuntu)\n# 필수 모듈 활성화 — proxy 베이스 모듈도 함께 로드해야 함\nsudo a2enmod proxy proxy_ajp proxy_http\ncat << 'EOF' | sudo tee /etc/apache2/sites-available/tomcat.conf\n<VirtualHost *:80>\n    ProxyPreserveHost On\n    <Proxy *>\n        Require all granted\n    </Proxy>\n    ProxyPass / ajp://WAS_PRIVATE_IP:8009/ secret=MySecretKey123!\n    ProxyPassReverse / ajp://WAS_PRIVATE_IP:8009/\n</VirtualHost>\nEOF\nsudo a2dissite 000-default.conf\nsudo a2ensite tomcat.conf\nsudo systemctl restart apache2`)
+        : `# [Web 서버] Nginx → Tomcat HTTP Reverse Proxy 설정\ncat << 'EOF' | sudo tee /etc/nginx/conf.d/tomcat.conf\nupstream tomcat_backend {\n    server WAS_PRIVATE_IP:8080;\n    keepalive 32;\n}\nserver {\n    listen 80;\n    server_name your_domain.com;\n    location / {\n        proxy_pass http://tomcat_backend;\n        proxy_http_version 1.1;\n        proxy_set_header Connection "";\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\nEOF\nsudo nginx -t && sudo systemctl restart nginx`)
     : (web === 'apache'
         ? `# Apache → WildFly HTTP 연동\ncat << 'EOF' | sudo tee /etc/httpd/conf.d/wildfly.conf\n<VirtualHost *:80>\n    ProxyPreserveHost On\n    ProxyPass / http://WAS_PRIVATE_IP:8080/\n    ProxyPassReverse / http://WAS_PRIVATE_IP:8080/\n</VirtualHost>\nEOF\nsudo systemctl restart httpd`
         : `# Nginx → WildFly 연동\ncat << 'EOF' | sudo tee /etc/nginx/conf.d/wildfly.conf\nupstream wildfly_backend {\n    server WAS_PRIVATE_IP:8080;\n}\nserver {\n    listen 80;\n    location / {\n        proxy_pass http://wildfly_backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n    }\n}\nEOF\nsudo nginx -t && sudo systemctl restart nginx`);
@@ -559,7 +584,7 @@ function getMission1ConsoleHtml() {
   <div class="step-title"><span class="step-num">1</span>VPC 생성</div>
   <div class="step-desc">NCP 콘솔 → <strong>Networking → VPC</strong> → VPC 생성 클릭<br>
   VPC 이름: <code>tutorial-vpc</code>, IPv4 CIDR: <code>10.0.0.0/16</code></div>
-  <div class="note"><strong>참고:</strong> VPC는 리전 내 격리된 가상 네트워크입니다. CIDR은 나중에 변경이 불가하므로 넉넉하게 설정하세요.</div>
+  <div class="note tip"><strong>참고:</strong> VPC는 리전 내 격리된 가상 네트워크입니다. CIDR은 나중에 변경이 불가하므로 넉넉하게 설정하세요.</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">2</span>서브넷 3개 생성</div>
@@ -587,7 +612,7 @@ function getMission1ConsoleHtml() {
   <div class="step-title"><span class="step-num">5</span>공인 IP (Floating IP) 할당</div>
   <div class="step-desc">Server → Public IP → 공인 IP 신청 → web-server에 할당<br>
   WAS, DB 서버는 외부 접근 불필요 → 공인 IP 미할당 (보안)</div>
-  <div class="note"><strong>비용 주의:</strong> 공인 IP는 할당 시 과금됩니다. 불필요한 IP는 반납하세요.</div>
+  <div class="note warn"><strong>💰 비용 주의:</strong> 공인 IP는 서버에 연결되어 있어도, 분리(반납하지 않은) 상태에서도 과금됩니다. 사용하지 않는 IP는 반드시 반납하세요.</div>
 </div>`;
   } else {
     return `
@@ -646,11 +671,12 @@ function getMission1CliHtml() {
   <div class="step-title"><span class="step-num">3</span>DB 설치 (db-server에서 실행)</div>
   <div class="step-desc">${db === 'mysql' ? 'MySQL 8.0' : db === 'postgresql' ? 'PostgreSQL 16' : 'MariaDB 10.11'} 설치 및 초기화:</div>
   ${codeBlock('bash', dbInstall)}
-  <div class="note"><strong>보안:</strong> mysql_secure_installation 실행 시 root 비밀번호 설정, 익명 사용자 제거, 원격 root 로그인 비활성화를 권장합니다.</div>
+  <div class="note warn"><strong>🔐 초기 보안 설정:</strong> <code>mysql_secure_installation</code>에서 root 비밀번호 설정, 익명 사용자 제거, 원격 root 로그인 비활성화, 테스트 DB 제거를 모두 Y로 선택하세요.</div>
 </div>
 <div class="guide-step">
-  <div class="step-title"><span class="step-num">4</span>Web-WAS 연동 설정 (web-server에서 실행)</div>
-  <div class="step-desc">WAS_PRIVATE_IP를 실제 WAS 서버의 내부 IP로 교체하세요:</div>
+  <div class="step-title"><span class="step-num">4</span>Web-WAS 연동 설정</div>
+  <div class="step-desc"><strong>WAS_PRIVATE_IP</strong>를 실제 WAS 서버 내부 IP로, <strong>MySecretKey123!</strong>은 강력한 비밀키로 교체하세요.</div>
+  ${was === 'tomcat' && web === 'apache' ? `<div class="note danger"><strong>⚠️ Tomcat 10 AJP 보안:</strong> Tomcat 9.0.31부터 AJP 커넥터가 보안상 기본 비활성화되었습니다 (Ghostcat CVE-2020-1938). 명시적 활성화 + <code>secretRequired="true"</code> + <code>secret</code> 키 설정이 필수입니다. 아래 스크립트는 두 서버 모두에서 순서대로 실행하세요 (WAS 서버 → Web 서버).</div>` : ''}
   ${codeBlock('bash', integrationCmd)}
 </div>
 <div class="guide-step">
@@ -715,9 +741,11 @@ function getMission2Html(tab) {
   <div class="step-desc">db-server2 생성 후 복제 설정 또는 Cloud DB for MySQL 사용 권장</div>
 </div>`;
   } else {
+    const mysqlCnfPath = isRocky ? '/etc/my.cnf.d/server.cnf' : '/etc/mysql/mysql.conf.d/mysqld.cnf';
+    const mysqlSvc = isRocky ? (state.selections.db === 'mariadb' ? 'mariadb' : 'mysqld') : (state.selections.db === 'mariadb' ? 'mariadb' : 'mysql');
     const dbRepl = state.selections.db === 'postgresql'
-      ? `# Master 서버 설정 (postgresql.conf)\nsudo sed -i "s/#wal_level = replica/wal_level = replica/" /etc/postgresql/*/main/postgresql.conf\nsudo sed -i "s/#max_wal_senders = 10/max_wal_senders = 3/" /etc/postgresql/*/main/postgresql.conf\n\n# pg_hba.conf에 slave 접근 허용\necho "host replication replicator DB_SLAVE_IP/32 md5" | sudo tee -a /etc/postgresql/*/main/pg_hba.conf\nsudo systemctl restart postgresql\n\n# 복제 사용자 생성\nsudo -u postgres psql -c "CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'ReplPass123!';"`
-      : `# Master 서버 설정 (/etc/mysql/mysql.conf.d/mysqld.cnf)\nsudo tee -a /etc/mysql/mysql.conf.d/mysqld.cnf << 'EOF'\n[mysqld]\nserver-id = 1\nlog_bin = /var/log/mysql/mysql-bin.log\nbinlog_do_db = appdb\nEOF\nsudo systemctl restart mysql\n\n# 복제 사용자 생성\nmysql -u root -p -e "CREATE USER 'replicator'@'DB_SLAVE_IP' IDENTIFIED BY 'ReplPass123!'; GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'DB_SLAVE_IP'; FLUSH PRIVILEGES;"`;
+      ? `# [Master 서버] PostgreSQL 12+ 권장 설정 방식 (ALTER SYSTEM 사용)\nsudo -u postgres psql << 'EOF'\nALTER SYSTEM SET wal_level = 'replica';\nALTER SYSTEM SET max_wal_senders = 3;\nALTER SYSTEM SET max_replication_slots = 3;\nCREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'ReplPass123!';\nSELECT pg_create_physical_replication_slot('replica_slot_1');\nEOF\n\n# pg_hba.conf에 슬레이브 접근 허용 (PG 14+ scram-sha-256 권장)\nPG_HBA=$(sudo -u postgres psql -t -c "SHOW hba_file;" | xargs)\necho "host replication replicator DB_SLAVE_IP/32 scram-sha-256" | sudo tee -a $PG_HBA\nsudo systemctl restart postgresql\n\n# [Slave 서버] base backup으로 초기 동기화 후 standby 모드 시작\n# sudo -u postgres pg_basebackup -h DB_MASTER_IP -D /var/lib/pgsql/data -U replicator -P -R -S replica_slot_1`
+      : `# [Master 서버] MySQL/MariaDB 바이너리 로그 활성화\n# 경로: ${isRocky ? 'Rocky/RHEL' : 'Ubuntu/Debian'}\nsudo tee -a ${mysqlCnfPath} << 'EOF'\n[mysqld]\nserver-id = 1\nlog_bin = mysql-bin\nbinlog_format = ROW\nbinlog_do_db = appdb\nEOF\nsudo systemctl restart ${mysqlSvc}\n\n# 복제 사용자 생성 (MySQL 8.0+는 caching_sha2_password 기본)\nmysql -u root -p << 'EOF'\nCREATE USER 'replicator'@'DB_SLAVE_IP' IDENTIFIED WITH mysql_native_password BY 'ReplPass123!';\nGRANT REPLICATION SLAVE ON *.* TO 'replicator'@'DB_SLAVE_IP';\nFLUSH PRIVILEGES;\nSHOW MASTER STATUS;  -- File, Position 값을 메모해두세요\nEOF\n\n# [Slave 서버] Master 연결 설정\n# CHANGE MASTER TO MASTER_HOST='DB_MASTER_IP', MASTER_USER='replicator', MASTER_PASSWORD='ReplPass123!', MASTER_LOG_FILE='mysql-bin.000001', MASTER_LOG_POS=XXX;\n# START SLAVE; SHOW SLAVE STATUS\\G`;
     return `
 <div class="guide-step">
   <div class="step-title"><span class="step-num">1</span>Web2 서버 소프트웨어 설치</div>
@@ -765,7 +793,7 @@ function getMission3Html(tab) {
   • VPC: tutorial-vpc, was-subnet<br>
   • Redis 버전: 7.x<br>
   • 자동 백업 활성화</div>
-  <div class="note"><strong>대안:</strong> 직접 설치를 원하면 아래 CLI 가이드를 참고하세요.</div>
+  <div class="note tip"><strong>💡 대안:</strong> 학습용으로 직접 설치하려면 아래 CLI 가이드를 참고하세요. 운영환경은 관리형 서비스(Cloud DB for Redis / ElastiCache)를 강력 권장합니다 — 자동 백업, HA, 패치 관리가 포함됩니다.</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">2</span>ACG에 Redis 포트 추가</div>
@@ -782,17 +810,20 @@ function getMission3Html(tab) {
 <div class="guide-step">
   <div class="step-title"><span class="step-num">1</span>Redis 직접 설치 (WAS 서버 또는 별도 서버)</div>
   ${codeBlock('bash', isRocky
-    ? `sudo dnf install -y redis\nsudo systemctl enable --now redis\n\n# 외부 접근 허용 설정 (was-subnet 내부 통신)\nsudo sed -i 's/bind 127.0.0.1/bind 0.0.0.0/' /etc/redis/redis.conf\nsudo sed -i 's/# requirepass foobared/requirepass RedisPass123!/' /etc/redis/redis.conf\nsudo systemctl restart redis`
-    : `sudo apt install -y redis-server\nsudo systemctl enable --now redis-server\n\n# 외부 접근 허용\nsudo sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0/' /etc/redis/redis.conf\nsudo sed -i 's/# requirepass foobared/requirepass RedisPass123!/' /etc/redis/redis.conf\nsudo systemctl restart redis-server`)}
+    ? `sudo dnf install -y redis\nsudo systemctl enable --now redis\n\n# 외부 접근 허용 — bind 라인을 0.0.0.0으로 (default 형태가 버전마다 달라 패턴 유연하게)\nsudo sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf\nsudo sed -i 's/^# requirepass .*/requirepass RedisPass123!/' /etc/redis/redis.conf\nsudo systemctl restart redis`
+    : `sudo apt install -y redis-server\nsudo systemctl enable --now redis-server\n\n# Ubuntu 기본 bind는 "bind 127.0.0.1 -::1" 형태 — 전체 라인 치환\nsudo sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf\nsudo sed -i 's/^# requirepass .*/requirepass RedisPass123!/' /etc/redis/redis.conf\nsudo systemctl restart redis-server`)}
+  <div class="note tip"><strong>보안 권장:</strong> <code>requirepass</code>가 설정되어 있으면 <code>protected-mode yes</code> 유지 가능합니다. 추가로 NCP ACG / AWS SG에서 <strong>WAS 서브넷에서만</strong> 6379 포트를 허용하세요.</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">2</span>Redis 연결 테스트</div>
   ${codeBlock('bash', `redis-cli -h REDIS_PRIVATE_IP -a RedisPass123! ping\n# 응답: PONG`)}
 </div>
 <div class="guide-step">
-  <div class="step-title"><span class="step-num">3</span>Tomcat Redis 세션 설정 (context.xml)</div>
-  ${codeBlock('xml', `<!-- /opt/tomcat/conf/context.xml -->\n<Context>\n  <Valve className="com.orangefunction.tomcat.redissessions.RedisSessionHandlerValve" />\n  <Manager className="com.orangefunction.tomcat.redissessions.RedisSessionManager"\n           host="REDIS_PRIVATE_IP"\n           port="6379"\n           password="RedisPass123!"\n           database="0"\n           maxInactiveInterval="60" />\n</Context>`)}
-  <div class="note"><strong>라이브러리:</strong> tomcat-redis-session-manager-3.x.jar를 /opt/tomcat/lib/에 복사하세요.</div>
+  <div class="step-title"><span class="step-num">3</span>Tomcat 10 Redis 세션 설정 (Redisson)</div>
+  <div class="step-desc">기존 <code>tomcat-redis-session-manager</code> (orangefunction) 라이브러리는 Tomcat 7/8 전용이며 사실상 EOL 상태입니다. Tomcat 10에서는 <strong>Redisson</strong>을 사용합니다.</div>
+  ${codeBlock('xml', `<!-- /opt/tomcat/conf/context.xml -->\n<Context>\n  <Manager className="org.redisson.tomcat.RedissonSessionManager"\n           configPath="\${catalina.base}/conf/redisson.yaml"\n           readMode="REDIS"\n           updateMode="DEFAULT"\n           keyPrefix="" />\n</Context>`)}
+  ${codeBlock('yaml', `# /opt/tomcat/conf/redisson.yaml\nsingleServerConfig:\n  address: "redis://REDIS_PRIVATE_IP:6379"\n  password: "RedisPass123!"\n  database: 0\n  connectionMinimumIdleSize: 4\n  connectionPoolSize: 16`)}
+  <div class="note tip"><strong>필요 JAR:</strong> Maven Central에서 <code>redisson-all-3.27.x.jar</code>와 <code>redisson-tomcat-10-3.27.x.jar</code>를 다운받아 <code>/opt/tomcat/lib/</code>에 복사 후 Tomcat 재시작.</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">4</span>Spring Boot Redis 세션 설정</div>
@@ -858,7 +889,7 @@ function getMission4Html(tab) {
 <div class="guide-step">
   <div class="step-title"><span class="step-num">2</span>인증서 발급 및 자동 설정</div>
   ${codeBlock('bash', `sudo certbot ${certbotPlugin} -d yourdomain.com -d www.yourdomain.com\n# 이메일 입력, 약관 동의, HTTP 리다이렉트 여부 선택`)}
-  <div class="note"><strong>주의:</strong> 도메인이 서버 IP를 가리키고 있어야 합니다. 방화벽에서 443 포트가 열려 있어야 합니다.</div>
+  <div class="note warn"><strong>⚠️ 사전 조건:</strong> ① 도메인 A 레코드가 서버 공인 IP를 가리키고 있어야 합니다. ② 방화벽/ACG/SG에서 80(검증용), 443 포트가 외부에 열려 있어야 합니다. ③ HTTP-01 검증 중에는 80 포트가 차단되면 발급 실패합니다.</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">3</span>자동 갱신 설정 확인</div>
@@ -898,9 +929,11 @@ function getMission5Html(tab) {
   <div class="step-title"><span class="step-num aws-mode">3</span>Auto Scaling Group 생성</div>
   <div class="step-desc">EC2 → Auto Scaling Groups → Create<br>
   • Launch template 선택<br>
-  • VPC: tutorial-vpc, web-subnet<br>
+  • VPC: tutorial-vpc, <strong>web-subnet-a + web-subnet-c (서로 다른 AZ 2개 이상)</strong><br>
   • 최소: 2, 희망: 2, 최대: 6<br>
-  • Load balancer: ALB Target Group 연결</div>
+  • Load balancer: ALB Target Group 연결<br>
+  • Health check type: <strong>ELB</strong> (Target Group 헬스체크 결과 활용)</div>
+  <div class="note warn"><strong>Multi-AZ 필수:</strong> 1개 서브넷만 지정하면 해당 AZ 장애 시 전체 서비스가 중단됩니다. 반드시 2개 이상의 AZ에 걸친 서브넷을 등록하세요.</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num aws-mode">4</span>Scaling Policy 설정</div>
@@ -925,7 +958,9 @@ function getMission5Html(tab) {
   <div class="step-desc">Auto Scaling → 오토스케일링 그룹 → 생성<br>
   • Launch Configuration 선택<br>
   • 최소: 2, 최대: 6, 기대: 2<br>
+  • <strong>가용영역: KR-1 + KR-2 등 2개 이상 선택</strong> (단일 AZ 구성 금지)<br>
   • Load Balancer 타겟 그룹 연결</div>
+  <div class="note warn"><strong>가용성:</strong> 단일 AZ에만 오토스케일링을 구성하면 해당 AZ 장애 시 전체 서비스가 중단됩니다. NCP도 KR-1, KR-2 두 개 이상에 분산 배치하세요.</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">4</span>스케일링 정책 설정</div>
@@ -976,19 +1011,19 @@ function getMission6Html(tab) {
   • StatusCheckFailed_Instance → 즉시 알림</div>
 </div>` : `
 <div class="guide-step">
-  <div class="step-title"><span class="step-num">1</span>Cloud Monitoring 에이전트 설치</div>
+  <div class="step-title"><span class="step-num">1</span>Cloud Insight 에이전트 설치</div>
   <div class="step-desc">각 서버에 NCP Monitoring 에이전트 설치 필요<br>
   (CLI 가이드 참고)</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">2</span>대시보드 구성</div>
-  <div class="step-desc">Management → Cloud Monitoring → 대시보드<br>
+  <div class="step-desc">Management → Cloud Insight → 대시보드<br>
   • CPU, 메모리, 디스크, 네트워크 메트릭 위젯 추가<br>
   • 서버별 그룹화</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">3</span>알람 규칙 생성</div>
-  <div class="step-desc">Cloud Monitoring → 알람 → 알람 규칙 생성<br>
+  <div class="step-desc">Cloud Insight → 알람 → 알람 규칙 생성<br>
   • CPU 사용률 80% 초과 → 이메일/SMS 통보<br>
   • 메모리 90% 초과 → 즉시 알림<br>
   • 디스크 사용률 85% 초과 → 경고</div>
@@ -996,8 +1031,10 @@ function getMission6Html(tab) {
   } else {
     return `
 <div class="guide-step">
-  <div class="step-title"><span class="step-num">1</span>NCP Monitoring 에이전트 설치</div>
-  ${codeBlock('bash', `# 모든 서버에 설치 (NCP 전용)\nwget https://monitoring.ncloud.com/downloads/agent/linux/install.sh\nsudo bash install.sh\n\n# 에이전트 상태 확인\nsudo systemctl status ncp-monitoring-agent`)}
+  <div class="step-title"><span class="step-num">1</span>NCP Cloud Insight 에이전트 설치</div>
+  <div class="step-desc">NCP는 콘솔에서 에이전트 설치 스크립트를 직접 다운받는 방식입니다 (URL이 시기에 따라 변경됨).</div>
+  ${codeBlock('bash', `# 1) NCP 콘솔 → Services → Cloud Insight → Configuration → 에이전트 관리\n#    → 설치 스크립트 다운로드 (또는 서버 생성 시 "Cloud Insight 에이전트 자동 설치" 옵션 사용)\n\n# 2) 다운로드한 스크립트를 서버에 업로드 후 실행\nsudo bash cw-agent-install.sh\n\n# 3) 에이전트 동작 확인 (서비스명은 버전에 따라 다름)\nsudo systemctl status nbase-agent || sudo systemctl status ncloud-agent\n\n# 4) 메트릭 수집 확인은 콘솔 → Cloud Insight → Metrics에서`)}
+  <div class="note tip"><strong>최신 정보:</strong> 정확한 다운로드 URL/스크립트명은 시기에 따라 변경되므로 NCP 콘솔의 Cloud Insight 페이지에서 확인하세요. 서버 생성 시 "Cloud Insight 에이전트 자동 설치"를 체크하는 것이 가장 간편합니다.</div>
 </div>
 <div class="guide-step">
   <div class="step-title"><span class="step-num">2</span>AWS CloudWatch Agent 설치 (AWS 환경)</div>
@@ -1206,8 +1243,9 @@ function renderMain() {
         <h2 class="mission-title">${m.icon} ${m.name}</h2>
         ${state.cleared.includes(m.id) ? '<span style="color:var(--success);font-size:14px">✅ 완료됨</span>' : ''}
       </div>
-      <div class="mission-desc">${getMissionDesc(m.id)}</div>
     </div>
+
+    ${getMissionSummary(m.id, modeClass)}
 
     <div class="arch-box">
       <div class="arch-title">아키텍처 다이어그램</div>
@@ -1254,6 +1292,30 @@ function getMissionDesc(id) {
     7: 'CDN을 통해 정적 리소스를 엣지 서버에서 제공합니다. 사용자와 가까운 서버에서 리소스를 전달해 속도를 높입니다.',
   };
   return descs[id];
+}
+
+function getMissionSummary(id, modeClass) {
+  const summaries = {
+    1: { icon:'🏗️', text:'<strong>기본 3-Tier 아키텍처</strong>를 구축합니다. Web/WAS/DB를 각각 별도 서브넷에 분리 배치하여 보안 경계를 명확히 합니다. 외부는 Web만 노출, WAS·DB는 Private 서브넷에 격리합니다.', points:['외부→Web→WAS→DB 단방향','각 계층 ACG 분리','단일 인스턴스 (이중화 X)'] },
+    2: { icon:'⚖️', text:'<strong>이중화 + Load Balancer</strong>로 단일 장애점(SPOF)을 제거합니다. Web/WAS 서버를 2대씩 두고 LB로 분산, DB는 Master-Slave 복제로 가용성을 확보합니다.', points:['수평 확장 기반','LB 헬스체크','DB 복제 구성'] },
+    3: { icon:'🔗', text:'<strong>Redis 기반 세션 외부화</strong>로 이중화 환경에서 세션 일관성을 보장합니다. 로드밸런서가 어떤 WAS로 라우팅해도 동일한 세션 데이터를 사용합니다.', points:['Sticky Session 불필요','서버 무상태(stateless)화','수평 확장 자유'] },
+    4: { icon:'🔒', text:'<strong>HTTPS/TLS 종료(termination)</strong>를 Load Balancer 레벨에서 처리합니다. 관리형 인증서 또는 Let\'s Encrypt를 사용하고, HTTP는 모두 HTTPS로 강제 리다이렉트합니다.', points:['TLS 1.2/1.3','자동 갱신 설정','HTTP→HTTPS 강제'] },
+    5: { icon:'📈', text:'<strong>오토스케일링</strong>으로 트래픽 변동에 자동 대응합니다. CPU/메모리 임계치에 따라 서버가 자동 추가·제거되며, 비용을 최적화하면서 가용성을 유지합니다.', points:['Multi-AZ 필수','이미지 기반 부팅','Warm-up 시간 고려'] },
+    6: { icon:'📊', text:'<strong>관측성(Observability)</strong>을 확보합니다. 메트릭·로그를 수집하고 임계치 기반 알람을 설정해 장애를 사전에 감지하고 대응할 수 있습니다.', points:['메트릭+로그+알람','대시보드 운영','SRE 기본기'] },
+    7: { icon:'🚀', text:'<strong>정적 리소스 CDN 분리</strong>로 사용자 응답속도와 오리진 부하를 동시에 개선합니다. 엣지 캐싱으로 글로벌 사용자 경험을 향상시킵니다.', points:['엣지 캐싱','오리진 부하↓','글로벌 응답속도↑'] },
+  };
+  const s = summaries[id];
+  if (!s) return '';
+  return `<div class="mission-summary${modeClass}">
+    <div class="mission-summary-icon">${s.icon}</div>
+    <div class="mission-summary-body">
+      <h3>📌 핵심 요약</h3>
+      <div class="mission-summary-text">${s.text}</div>
+      <div class="mission-summary-points">
+        ${s.points.map(p => `<span class="summary-point">${p}</span>`).join('')}
+      </div>
+    </div>
+  </div>`;
 }
 
 function getOsLabel() { return state.selections.os === 'rocky' ? 'Rocky Linux 8' : 'Ubuntu 22.04'; }
