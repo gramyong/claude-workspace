@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>클라우드 인프라 구성 튜토리얼</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d1117;--card:#161b22;--card2:#1c2128;--border:#30363d;--text:#e6edf3;--text2:#8b949e;
+  --accent:#03C75A;--accent2:#02a34d;--aws:#FF9900;--aws2:#e68a00;
+  --danger:#f85149;--warn:#d29922;--success:#3fb950;
+  --sidebar:280px;
+}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;min-height:100vh;overflow-x:hidden}
+/* TOP BAR */
+.topbar{position:fixed;top:0;left:0;right:0;height:56px;background:#0d1117ee;backdrop-filter:blur(10px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:100;gap:16px}
+.topbar h1{font-size:18px;font-weight:700;color:var(--accent);white-space:nowrap}
+.topbar h1 span{color:var(--text)}
+.provider-toggle{display:flex;background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-left:auto}
+.provider-btn{padding:6px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text2);transition:all .2s}
+.provider-btn.active.ncp{background:var(--accent);color:#fff}
+.provider-btn.active.aws{background:var(--aws);color:#fff}
+.progress-wrap{display:flex;align-items:center;gap:10px;margin-left:16px}
+.progress-label{font-size:12px;color:var(--text2);white-space:nowrap}
+.progress-bar{width:120px;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .5s}
+.progress-fill.aws-mode{background:var(--aws)}
+/* LAYOUT */
+.layout{display:flex;padding-top:56px;min-height:100vh}
+/* SIDEBAR */
+.sidebar{width:var(--sidebar);position:fixed;top:56px;left:0;bottom:0;background:var(--card);border-right:1px solid var(--border);overflow-y:auto;padding:16px 0}
+.sidebar-title{font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.08em;padding:0 16px 8px;text-transform:uppercase}
+.mission-item{display:flex;align-items:flex-start;gap:10px;padding:10px 16px;cursor:pointer;transition:background .15s;border-left:3px solid transparent;margin-bottom:2px}
+.mission-item:hover:not(.locked){background:var(--card2)}
+.mission-item.active{background:var(--card2);border-left-color:var(--accent)}
+.mission-item.active.aws-mode{border-left-color:var(--aws)}
+.mission-item.cleared{opacity:.85}
+.mission-item.locked{opacity:.45;cursor:not-allowed}
+.mission-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.mission-info{flex:1;min-width:0}
+.mission-name{font-size:13px;font-weight:600;line-height:1.3}
+.mission-sub{font-size:11px;color:var(--text2);margin-top:2px;line-height:1.4}
+.mission-badge{font-size:10px;padding:1px 6px;border-radius:10px;background:#238636;color:#fff;margin-top:4px;display:inline-block}
+.mission-badge.locked{background:var(--border);color:var(--text2)}
+/* MAIN */
+.main{margin-left:var(--sidebar);flex:1;padding:24px;max-width:1200px}
+.mission-header{margin-bottom:20px}
+.mission-title-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.mission-num{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--accent);color:#fff}
+.mission-num.aws-mode{background:var(--aws)}
+.mission-title{font-size:22px;font-weight:700}
+.mission-desc{color:var(--text2);font-size:14px;line-height:1.6}
+/* ARCH DIAGRAM */
+.arch-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.arch-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:16px;letter-spacing:.05em}
+.arch-diagram{display:flex;align-items:center;justify-content:center;gap:0;flex-wrap:wrap;min-height:80px}
+.arch-node{display:flex;flex-direction:column;align-items:center;gap:4px}
+.arch-node-box{padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;border:2px solid;text-align:center;min-width:80px}
+.arch-node-box.internet{border-color:#58a6ff;background:#58a6ff22;color:#58a6ff}
+.arch-node-box.web{border-color:var(--accent);background:#03C75A22;color:var(--accent)}
+.arch-node-box.was{border-color:#d2a8ff;background:#d2a8ff22;color:#d2a8ff}
+.arch-node-box.db{border-color:var(--warn);background:#d2992222;color:var(--warn)}
+.arch-node-box.lb{border-color:#58a6ff;background:#58a6ff22;color:#58a6ff}
+.arch-node-box.redis{border-color:#f85149;background:#f8514922;color:#f85149}
+.arch-node-box.cdn{border-color:#79c0ff;background:#79c0ff22;color:#79c0ff}
+.arch-node-box.monitor{border-color:#56d364;background:#56d36422;color:#56d364}
+.arch-node-label{font-size:10px;color:var(--text2)}
+.arch-arrow{font-size:18px;color:var(--border);margin:0 4px;align-self:center}
+.arch-group{display:flex;flex-direction:column;gap:6px;align-items:center}
+.arch-group-label{font-size:10px;color:var(--text2);text-align:center}
+/* TECH SELECTORS */
+.selectors-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.selector-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.selector-label{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.06em;margin-bottom:10px;text-transform:uppercase}
+.tech-cards{display:flex;flex-direction:column;gap:6px}
+.tech-card{border:2px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .2s;background:var(--card2)}
+.tech-card:hover{border-color:var(--accent)}
+.tech-card.selected{border-color:var(--accent);background:#03C75A15}
+.tech-card.selected.aws-mode{border-color:var(--aws);background:#FF990015}
+.tech-card-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.tech-name{font-size:13px;font-weight:600}
+.tech-badge{font-size:10px;padding:1px 7px;border-radius:10px;background:#9e6a03;color:#ffc;font-weight:600}
+.tech-badge.recommended{background:#1a7f37;color:#acf2bd}
+.tech-features{font-size:11px;color:var(--text2);line-height:1.6}
+.tech-usecase{font-size:11px;color:var(--text2);margin-top:4px;font-style:italic}
+/* GUIDE TABS */
+.guide-box{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px}
+.guide-tabs{display:flex;border-bottom:1px solid var(--border)}
+.guide-tab{padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;transition:all .2s;background:none;border-top:none;border-left:none;border-right:none}
+.guide-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.guide-tab.active.aws-mode{color:var(--aws);border-bottom-color:var(--aws)}
+.guide-content{padding:20px;display:none}
+.guide-content.active{display:block}
+.guide-step{margin-bottom:20px}
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;margin-right:8px;flex-shrink:0}
+.step-num.aws-mode{background:var(--aws)}
+.step-title{font-size:14px;font-weight:600;margin-bottom:8px;display:flex;align-items:center}
+.step-desc{font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:8px;margin-left:30px}
+/* CODE BLOCKS */
+.code-block{position:relative;background:#010409;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:8px 0 8px 30px}
+.code-header{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--card2);border-bottom:1px solid var(--border)}
+.code-lang{font-size:11px;color:var(--text2)}
+.copy-btn{font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .2s}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent)}
+.copy-btn.copied{border-color:var(--success);color:var(--success)}
+pre{padding:14px;font-size:12px;line-height:1.7;overflow-x:auto;color:#e6edf3}
+pre .comment{color:#8b949e}
+pre .keyword{color:#ff7b72}
+pre .string{color:#a5d6ff}
+pre .cmd{color:#79c0ff}
+/* CHECKLIST */
+.checklist-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.checklist-title{font-size:14px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.checklist-progress{font-size:12px;color:var(--text2);margin-left:auto}
+.check-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.check-item:last-child{border-bottom:none}
+.check-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;margin-top:2px}
+.check-item label{font-size:13px;line-height:1.5;cursor:pointer;color:var(--text)}
+.check-item.checked label{color:var(--text2);text-decoration:line-through}
+.clear-btn{width:100%;padding:14px;font-size:15px;font-weight:700;border-radius:10px;border:none;cursor:pointer;transition:all .3s;background:var(--border);color:var(--text2)}
+.clear-btn.ready{background:var(--accent);color:#fff;box-shadow:0 0 20px #03C75A55}
+.clear-btn.ready.aws-mode{background:var(--aws);box-shadow:0 0 20px #FF990055}
+.clear-btn.ready:hover{transform:translateY(-2px)}
+/* MISSION CLEAR OVERLAY */
+.clear-overlay{position:fixed;inset:0;background:#0d111799;backdrop-filter:blur(8px);z-index:200;display:none;align-items:center;justify-content:center}
+.clear-overlay.show{display:flex}
+.clear-card{background:var(--card);border:2px solid var(--accent);border-radius:20px;padding:48px;text-align:center;max-width:480px;animation:popIn .4s ease-out}
+.clear-card.aws-mode{border-color:var(--aws)}
+@keyframes popIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.clear-icon{font-size:64px;margin-bottom:16px}
+.clear-title{font-size:32px;font-weight:900;color:var(--accent);letter-spacing:.05em;margin-bottom:8px}
+.clear-title.aws-mode{color:var(--aws)}
+.clear-sub{font-size:16px;color:var(--text2);margin-bottom:24px}
+.clear-next-btn{padding:12px 32px;font-size:15px;font-weight:700;border-radius:10px;border:none;background:var(--accent);color:#fff;cursor:pointer;margin-right:10px}
+.clear-next-btn.aws-mode{background:var(--aws)}
+.clear-close-btn{padding:12px 32px;font-size:15px;font-weight:700;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer}
+/* STARS */
+.stars{display:flex;justify-content:center;gap:6px;margin-bottom:20px}
+.star{font-size:32px;opacity:.3;transition:opacity .3s}
+.star.lit{opacity:1}
+/* NOTES */
+.note{background:#1c2128;border-left:3px solid var(--warn);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0 8px 30px;font-size:12px;color:var(--text2);line-height:1.6}
+.note strong{color:var(--warn)}
+/* SCROLLBAR */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#484f58}
+/* RESPONSIVE */
+@media(max-width:1024px){
+  .selectors-grid{grid-template-columns:1fr}
+  .main{padding:16px}
+}
+.hidden{display:none!important}
+.tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:var(--card2);border:1px solid var(--border);color:var(--text2);margin-right:4px}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <h1>☁️ <span>클라우드 인프라</span> 미션</h1>
+  <div class="provider-toggle">
+    <button class="provider-btn active ncp" onclick="setProvider('ncp')">Naver Cloud Platform</button>
+    <button class="provider-btn aws" onclick="setProvider('aws')">AWS</button>
+  </div>
+  <div class="progress-wrap">
+    <span class="progress-label" id="progressLabel">0 / 7 완료</span>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+<!-- SIDEBAR -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-title">미션 목록</div>
+  <!-- Mission items injected by JS -->
+</div>
+
+<!-- MAIN -->
+<div class="main" id="mainArea">
+  <!-- Content injected by JS -->
+</div>
+
+</div>
+
+<!-- MISSION CLEAR OVERLAY -->
+<div class="clear-overlay" id="clearOverlay">
+  <div class="clear-card" id="clearCard">
+    <div class="stars" id="clearStars">
+      <span class="star" id="s1">⭐</span>
+      <span class="star" id="s2">⭐</span>
+      <span class="star" id="s3">⭐</span>
+    </div>
+    <div class="clear-icon">🏆</div>
+    <div class="clear-title" id="clearTitle">MISSION CLEAR!</div>
+    <div class="clear-sub" id="clearSub">미션을 완료했습니다!</div>
+    <button class="clear-next-btn" id="clearNextBtn" onclick="goNextMission()">다음 미션 →</button>
+    <button class="clear-close-btn" onclick="closeClearOverlay()">닫기</button>
+  </div>
+</div>
+
+<script>
+// ===================== DATA =====================
+const MISSIONS = [
+  {id:1, name:'단중화 구성', sub:'Web + WAS + DB 1대씩', icon:'🖥️'},
+  {id:2, name:'이중화 구성', sub:'이중화 + Load Balancer', icon:'⚖️'},
+  {id:3, name:'세션 유지 구성', sub:'이중화 + Redis', icon:'💾'},
+  {id:4, name:'SSL/HTTPS 구성', sub:'인증서 발급 + HTTPS', icon:'🔒'},
+  {id:5, name:'오토스케일링 구성', sub:'Auto Scaling', icon:'📈'},
+  {id:6, name:'모니터링 구성', sub:'메트릭 + 알람', icon:'📊'},
+  {id:7, name:'CDN 구성', sub:'정적 리소스 최적화', icon:'🌐'},
+];
+
+const OS_OPTIONS = [
+  {id:'rocky', name:'Rocky Linux 8', features:['RHEL 호환 엔터프라이즈 리눅스','SELinux 기본 활성화','dnf 패키지 매니저','장기 지원(LTS) 제공'], usecase:'엔터프라이즈 환경, CentOS 대체용으로 적합'},
+  {id:'ubuntu', name:'Ubuntu 22.04 LTS', features:['가장 넓은 생태계 지원','apt 패키지 매니저','2027년까지 공식 지원','클라우드 이미지 최적화'], usecase:'범용 서버, 개발환경, 스타트업에 적합'},
+];
+const WEB_OPTIONS = [
+  {id:'apache', name:'Apache 2.4', features:['.htaccess 지원','mod_rewrite URL 재작성','다양한 모듈 생태계','AJP 프로토콜 지원'], usecase:'전통적인 웹 서버, Tomcat과 AJP 연동 시 최적'},
+  {id:'nginx', name:'Nginx 1.24', features:['고성능 이벤트 기반 아키텍처','리버스 프록시/로드밸런서','정적 파일 고속 처리','낮은 메모리 사용량'], usecase:'고트래픽 환경, 마이크로서비스 프록시에 적합'},
+];
+const WAS_OPTIONS = [
+  {id:'tomcat', name:'Apache Tomcat 10.1', features:['Jakarta EE 10 서블릿 컨테이너','가볍고 빠른 시작','넓은 커뮤니티 지원','Spring Boot 기본 내장 서버'], usecase:'Java 웹 애플리케이션, Spring Framework 배포'},
+  {id:'wildfly', name:'WildFly 31 (JBoss)', features:['Jakarta EE 완전 구현','EJB, CDI, JPA 지원','관리 콘솔 제공','도메인 모드 클러스터링'], usecase:'엔터프라이즈 Java EE 앱, 복잡한 비즈니스 로직'},
+];
+const DB_OPTIONS = [
+  {id:'mysql', name:'MySQL 8.0', features:['가장 널리 사용되는 RDBMS','InnoDB 스토리지 엔진','JSON 데이터 타입 지원','활발한 생태계'], usecase:'웹 애플리케이션, LAMP/LEMP 스택'},
+  {id:'postgresql', name:'PostgreSQL 16', features:['고급 SQL 표준 준수','복잡한 쿼리 최적화','JSONB 고성능 처리','확장성 및 안정성'], usecase:'복잡한 데이터 모델, 분석 쿼리, WildFly와 조합'},
+  {id:'mariadb', name:'MariaDB 10.11', features:['MySQL 완전 호환 포크','Aria 스토리지 엔진','갈레라 클러스터 지원','오픈소스 100%'], usecase:'MySQL 대체, 멀티 마스터 클러스터링'},
+];
+
+// ===================== STATE =====================
+let state = {
+  provider: 'ncp',
+  currentMission: 1,
+  cleared: [],
+  selections: {os:'rocky', web:'apache', was:'tomcat', db:'mysql'},
+  checks: {},
+  guideTab: 'console',
+};
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('cloudTutorialState');
+    if (s) {
+      const parsed = JSON.parse(s);
+      state = Object.assign(state, parsed);
+    }
+  } catch(e){}
+}
+
+function saveState() {
+  try { localStorage.setItem('cloudTutorialState', JSON.stringify(state)); } catch(e){}
+}
+
+// ===================== PROVIDER =====================
+function setProvider(p) {
+  state.provider = p;
+  saveState();
+  document.querySelectorAll('.provider-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.provider-btn.' + p).classList.add('active');
+  applyProviderTheme();
+  renderAll();
+}
+
+function applyProviderTheme() {
+  const isAws = state.provider === 'aws';
+  document.documentElement.style.setProperty('--accent', isAws ? '#FF9900' : '#03C75A');
+  document.documentElement.style.setProperty('--accent2', isAws ? '#e68a00' : '#02a34d');
+  document.querySelectorAll('.aws-mode-el').forEach(el => {
+    el.classList.toggle('aws-mode', isAws);
+  });
+}
+
+// ===================== RECOMMENDATION =====================
+function getRecommendations() {
+  const {web, was, db} = state.selections;
+  let recWas = null, recDb = null;
+  // Web → WAS
+  if (web === 'apache' || web === 'nginx') recWas = 'tomcat';
+  // WAS → DB
+  if (was === 'tomcat' && web === 'apache') recDb = 'mysql';
+  else if (was === 'tomcat' && web === 'nginx') recDb = 'postgresql';
+  else if (was === 'wildfly') recDb = 'postgresql';
+  return {recWas, recDb};
+}
+
+// ===================== RENDER SIDEBAR =====================
+function renderSidebar() {
+  const sb = document.getElementById('sidebar');
+  const isAws = state.provider === 'aws';
+  let html = '<div class="sidebar-title">미션 목록</div>';
+  MISSIONS.forEach((m, i) => {
+    const cleared = state.cleared.includes(m.id);
+    const active = state.currentMission === m.id;
+    const locked = m.id > 1 && !state.cleared.includes(m.id - 1) && !cleared && !active;
+    let cls = 'mission-item';
+    if (locked) cls += ' locked';
+    else if (cleared) cls += ' cleared';
+    if (active) cls += ' active' + (isAws ? ' aws-mode' : '');
+    let icon = locked ? '🔒' : cleared ? '✅' : active ? '▶️' : '⏸️';
+    let badge = locked ? '<span class="mission-badge locked">잠김</span>' : cleared ? '<span class="mission-badge">완료</span>' : active ? '<span class="mission-badge" style="background:#1d3a5f;color:#79c0ff">진행중</span>' : '';
+    html += `<div class="${cls}" onclick="selectMission(${m.id})">
+      <div class="mission-icon">${icon}</div>
+      <div class="mission-info">
+        <div class="mission-name">미션 ${m.id}. ${m.name}</div>
+        <div class="mission-sub">${m.sub}</div>
+        ${badge}
+      </div>
+    </div>`;
+  });
+  sb.innerHTML = html;
+}
+
+function selectMission(id) {
+  const m = MISSIONS[id - 1];
+  const locked = id > 1 && !state.cleared.includes(id - 1) && !state.cleared.includes(id);
+  if (locked) return;
+  state.currentMission = id;
+  saveState();
+  renderSidebar();
+  renderMain();
+}
+
+// ===================== PROGRESS BAR =====================
+function renderProgress() {
+  const n = state.cleared.length;
+  document.getElementById('progressLabel').textContent = n + ' / 7 완료';
+  document.getElementById('progressFill').style.width = (n/7*100) + '%';
+  const isAws = state.provider === 'aws';
+  document.getElementById('progressFill').className = 'progress-fill' + (isAws ? ' aws-mode' : '');
+}
+
+// ===================== ARCHITECTURE DIAGRAMS =====================
+function getArchHtml(missionId) {
+  const nodes = (items) => items.map(([type,label,sub]) =>
+    `<div class="arch-node"><div class="arch-node-box ${type}">${label}</div>${sub ? `<div class="arch-node-label">${sub}</div>` : ''}</div>`
+  ).join('');
+  const arr = `<div class="arch-arrow">→</div>`;
+  const isAws = state.provider === 'aws';
+  const lbLabel = isAws ? 'ALB' : 'Load Balancer';
+
+  switch(missionId) {
+    case 1: return `<div class="arch-diagram">
+      ${nodes([['internet','Internet','']])}${arr}
+      ${nodes([['web','Web Server','Nginx/Apache']])}${arr}
+      ${nodes([['was','WAS','Tomcat/WildFly']])}${arr}
+      ${nodes([['db','DB Server','MySQL/PG/Maria']])}
+    </div>`;
+    case 2: return `<div class="arch-diagram">
+      ${nodes([['internet','Internet','']])}${arr}
+      ${nodes([['lb',lbLabel,'']])}${arr}
+      <div class="arch-group">
+        ${nodes([['web','Web1',''],['web','Web2','']])}
+        <div class="arch-group-label">Web 서버 2대</div>
+      </div>${arr}
+      <div class="arch-group">
+        ${nodes([['was','WAS1',''],['was','WAS2','']])}
+        <div class="arch-group-label">WAS 서버 2대</div>
+      </div>${arr}
+      <div class="arch-group">
+        ${nodes([['db','DB Master',''],['db','DB Slave','']])}
+        <div class="arch-group-label">DB 이중화</div>
+      </div>
+    </div>`;
+    case 3: return `<div class="arch-diagram" style="flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:0">
+        ${nodes([['internet','Internet','']])}${arr}
+        ${nodes([['lb',lbLabel,'']])}${arr}
+        <div class="arch-group">
+          ${nodes([['web','Web1',''],['web','Web2','']])}
+        </div>${arr}
+        <div class="arch-group">
+          ${nodes([['was','WAS1',''],['was','WAS2','']])}
+        </div>${arr}
+        ${nodes([['db','DB','Master/Slave']])}
+      </div>
+      <div style="display:flex;justify-content:center;gap:8px;align-items:center">
+        <div style="font-size:11px;color:var(--text2)">WAS → </div>
+        ${nodes([['redis','Redis','세션 저장']])}
+      </div>
+    </div>`;
+    case 4: return `<div class="arch-diagram">
+      ${nodes([['internet','Internet','']])}${arr}
+      ${nodes([['cdn','HTTPS 443','SSL 종료']])}${arr}
+      ${nodes([['lb',lbLabel,'']])}${arr}
+      <div class="arch-group">
+        ${nodes([['web','Web1',''],['web','Web2','']])}
+      </div>${arr}
+      ${nodes([['was','WAS','클러스터']])}${arr}
+      ${nodes([['db','DB','Master/Slave']])}
+    </div>`;
+    case 5: return `<div class="arch-diagram">
+      ${nodes([['internet','Internet','']])}${arr}
+      ${nodes([['lb',lbLabel,'']])}${arr}
+      <div class="arch-group">
+        ${nodes([['web','Web','Auto Scale']])}
+        <div class="arch-group-label">1~N 자동 조정</div>
+      </div>${arr}
+      <div class="arch-group">
+        ${nodes([['was','WAS','Auto Scale']])}
+        <div class="arch-group-label">1~N 자동 조정</div>
+      </div>${arr}
+      ${nodes([['db','DB','RDS/Managed']])}
+    </div>`;
+    case 6: return `<div class="arch-diagram" style="flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:0">
+        ${nodes([['internet','Internet','']])}${arr}
+        ${nodes([['lb',lbLabel,'']])}${arr}
+        ${nodes([['web','Web','n대']])}${arr}
+        ${nodes([['was','WAS','n대']])}${arr}
+        ${nodes([['db','DB','Cluster']])}
+      </div>
+      <div style="display:flex;justify-content:center;gap:8px">
+        ${nodes([['monitor','모니터링','에이전트']])}
+        <div style="font-size:11px;color:var(--text2);align-self:center">← 모든 서버에서 메트릭 수집 → 알람</div>
+      </div>
+    </div>`;
+    case 7: return `<div class="arch-diagram">
+      ${nodes([['internet','User','']])}${arr}
+      ${nodes([['cdn','CDN','캐시 히트']])}${arr}
+      ${nodes([['lb',lbLabel,'오리진']])}${arr}
+      <div class="arch-group">
+        ${nodes([['web','Web','동적']])}
+        ${nodes([['cdn','정적 스토리지','이미지/CSS/JS']])}
+      </div>
+    </div>`;
+  }
+}
+
+// ===================== TECH SELECTORS =====================
+function renderSelectors() {
+  const {recWas, recDb} = getRecommendations();
+  const isAws = state.provider === 'aws';
+
+  function cardHtml(opt, type, selectedId, recId) {
+    const sel = selectedId === opt.id;
+    const rec = recId === opt.id;
+    return `<div class="tech-card${sel ? ' selected' + (isAws ? ' aws-mode' : '') : ''}" onclick="selectTech('${type}','${opt.id}')">
+      <div class="tech-card-head">
+        <span class="tech-name">${opt.name}</span>
+        ${rec ? '<span class="tech-badge recommended">추천</span>' : ''}
+      </div>
+      <div class="tech-features">${opt.features.map(f=>`• ${f}`).join('<br>')}</div>
+      <div class="tech-usecase">${opt.usecase}</div>
+    </div>`;
+  }
+
+  return `<div class="selectors-grid">
+    <div class="selector-section">
+      <div class="selector-label">🖥️ OS 선택</div>
+      <div class="tech-cards">${OS_OPTIONS.map(o=>cardHtml(o,'os',state.selections.os,null)).join('')}</div>
+    </div>
+    <div class="selector-section">
+      <div class="selector-label">🌐 Web 서버 선택</div>
+      <div class="tech-cards">${WEB_OPTIONS.map(o=>cardHtml(o,'web',state.selections.web,null)).join('')}</div>
+    </div>
+    <div class="selector-section">
+      <div class="selector-label">☕ WAS 선택</div>
+      <div class="tech-cards">${WAS_OPTIONS.map(o=>cardHtml(o,'was',state.selections.was,recWas)).join('')}</div>
+    </div>
+    <div class="selector-section">
+      <div class="selector-label">🗄️ DB 선택</div>
+      <div class="tech-cards">${DB_OPTIONS.map(o=>cardHtml(o,'db',state.selections.db,recDb)).join('')}</div>
+    </div>
+  </div>`;
+}
+
+function selectTech(type, id) {
+  state.selections[type] = id;
+  saveState();
+  renderMain();
+}
+
+// ===================== CODE BLOCK HELPER =====================
+let codeBlockIndex = 0;
+function codeBlock(lang, code) {
+  const idx = ++codeBlockIndex;
+  const escaped = code.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `<div class="code-block">
+    <div class="code-header">
+      <span class="code-lang">${lang}</span>
+      <button class="copy-btn" onclick="copyCode(this, ${idx})">복사</button>
+    </div>
+    <pre id="code_${idx}">${escaped}</pre>
+  </div>`;
+}
+function copyCode(btn, idx) {
+  const pre = document.getElementById('code_' + idx);
+  navigator.clipboard.writeText(pre.innerText).then(() => {
+    btn.textContent = '✓ 복사됨';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ===================== GUIDE CONTENT =====================
+function getInstallCommands() {
+  const {os, web, was, db} = state.selections;
+  const isRocky = os === 'rocky';
+
+  const webInstall = isRocky
+    ? (web === 'apache'
+        ? `sudo dnf install -y httpd\nsudo systemctl enable --now httpd\nsudo firewall-cmd --permanent --add-service=http --add-service=https\nsudo firewall-cmd --reload`
+        : `sudo dnf install -y nginx\nsudo systemctl enable --now nginx\nsudo firewall-cmd --permanent --add-service=http --add-service=https\nsudo firewall-cmd --reload`)
+    : (web === 'apache'
+        ? `sudo apt update && sudo apt install -y apache2\nsudo systemctl enable --now apache2\nsudo ufw allow 'Apache Full'`
+        : `sudo apt update && sudo apt install -y nginx\nsudo systemctl enable --now nginx\nsudo ufw allow 'Nginx Full'`);
+
+  const javaInstall = isRocky
+    ? `sudo dnf install -y java-17-openjdk`
+    : `sudo apt install -y openjdk-17-jdk`;
+
+  const wasInstall = was === 'tomcat'
+    ? `${javaInstall}\n\ncd /opt\nsudo wget https://downloads.apache.org/tomcat/tomcat-10/v10.1.28/bin/apache-tomcat-10.1.28.tar.gz\nsudo tar -xzf apache-tomcat-10.1.28.tar.gz\nsudo mv apache-tomcat-10.1.28 tomcat\nsudo useradd -r -m -U -d /opt/tomcat -s /bin/false tomcat\nsudo chown -R tomcat: /opt/tomcat\n# Tomcat 시작\nsudo /opt/tomcat/bin/startup.sh`
+    : `${javaInstall}\n\ncd /opt\nsudo wget https://github.com/wildfly/wildfly/releases/download/31.0.0.Final/wildfly-31.0.0.Final.tar.gz\nsudo tar -xzf wildfly-31.0.0.Final.tar.gz\nsudo mv wildfly-31.0.0.Final wildfly\nsudo useradd -r -s /sbin/nologin wildfly\nsudo chown -R wildfly: /opt/wildfly\n# WildFly 시작\nsudo /opt/wildfly/bin/standalone.sh -b 0.0.0.0`;
+
+  let dbInstall = '';
+  if (db === 'mysql') {
+    dbInstall = isRocky
+      ? `sudo dnf install -y mysql-server\nsudo systemctl enable --now mysqld\nsudo mysql_secure_installation`
+      : `sudo apt install -y mysql-server\nsudo mysql_secure_installation`;
+  } else if (db === 'postgresql') {
+    dbInstall = isRocky
+      ? `sudo dnf install -y postgresql-server\nsudo postgresql-setup --initdb\nsudo systemctl enable --now postgresql`
+      : `sudo apt install -y postgresql postgresql-contrib\nsudo systemctl enable --now postgresql`;
+  } else {
+    dbInstall = isRocky
+      ? `sudo dnf install -y mariadb-server\nsudo systemctl enable --now mariadb\nsudo mysql_secure_installation`
+      : `sudo apt install -y mariadb-server\nsudo mysql_secure_installation`;
+  }
+
+  const integrationCmd = was === 'tomcat'
+    ? (web === 'apache'
+        ? (isRocky
+            ? `# AJP 연동 설정 (Rocky Linux)\ncat << 'EOF' | sudo tee /etc/httpd/conf.d/tomcat.conf\n<VirtualHost *:80>\n    ProxyPreserveHost On\n    ProxyPass / ajp://WAS_PRIVATE_IP:8009/\n    ProxyPassReverse / ajp://WAS_PRIVATE_IP:8009/\n</VirtualHost>\nEOF\nsudo systemctl restart httpd`
+            : `# AJP 연동 설정 (Ubuntu)\nsudo a2enmod proxy_ajp\ncat << 'EOF' | sudo tee /etc/apache2/sites-available/tomcat.conf\n<VirtualHost *:80>\n    ProxyPreserveHost On\n    ProxyPass / ajp://WAS_PRIVATE_IP:8009/\n    ProxyPassReverse / ajp://WAS_PRIVATE_IP:8009/\n</VirtualHost>\nEOF\nsudo a2ensite tomcat.conf\nsudo systemctl restart apache2`)
+        : `# Nginx Reverse Proxy 설정\ncat << 'EOF' | sudo tee /etc/nginx/conf.d/tomcat.conf\nupstream tomcat_backend {\n    server WAS_PRIVATE_IP:8080;\n}\nserver {\n    listen 80;\n    server_name your_domain.com;\n    location / {\n        proxy_pass http://tomcat_backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n    }\n}\nEOF\nsudo nginx -t && sudo systemctl restart nginx`)
+    : (web === 'apache'
+        ? `# Apache → WildFly HTTP 연동\ncat << 'EOF' | sudo tee /etc/httpd/conf.d/wildfly.conf\n<VirtualHost *:80>\n    ProxyPreserveHost On\n    ProxyPass / http://WAS_PRIVATE_IP:8080/\n    ProxyPassReverse / http://WAS_PRIVATE_IP:8080/\n</VirtualHost>\nEOF\nsudo systemctl restart httpd`
+        : `# Nginx → WildFly 연동\ncat << 'EOF' | sudo tee /etc/nginx/conf.d/wildfly.conf\nupstream wildfly_backend {\n    server WAS_PRIVATE_IP:8080;\n}\nserver {\n    listen 80;\n    location / {\n        proxy_pass http://wildfly_backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n    }\n}\nEOF\nsudo nginx -t && sudo systemctl restart nginx`);
+
+  return { webInstall, wasInstall, dbInstall, integrationCmd };
+}
+
+function getMission1ConsoleHtml() {
+  const isAws = state.provider === 'aws';
+  const {os} = state.selections;
+  const osLabel = os === 'rocky' ? 'Rocky Linux 8' : 'Ubuntu 22.04 LTS';
+
+  if (!isAws) {
+    return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>VPC 생성</div>
+  <div class="step-desc">NCP 콘솔 → <strong>Networking → VPC</strong> → VPC 생성 클릭<br>
+  VPC 이름: <code>tutorial-vpc</code>, IPv4 CIDR: <code>10.0.0.0/16</code></div>
+  <div class="note"><strong>참고:</strong> VPC는 리전 내 격리된 가상 네트워크입니다. CIDR은 나중에 변경이 불가하므로 넉넉하게 설정하세요.</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>서브넷 3개 생성</div>
+  <div class="step-desc">VPC → 서브넷 생성 (3회 반복):<br>
+  • <strong>web-subnet</strong>: 10.0.1.0/24, 가용영역 KR-1, Public<br>
+  • <strong>was-subnet</strong>: 10.0.2.0/24, 가용영역 KR-1, Private<br>
+  • <strong>db-subnet</strong>: 10.0.3.0/24, 가용영역 KR-1, Private</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>ACG(Access Control Group) 생성</div>
+  <div class="step-desc">VPC → ACG → ACG 생성 (3개 생성):<br>
+  • <strong>web-acg</strong>: TCP 80(0.0.0.0/0), TCP 443(0.0.0.0/0), TCP 22(관리자IP)<br>
+  • <strong>was-acg</strong>: TCP 8080(10.0.1.0/24), TCP 8009(10.0.1.0/24), TCP 22(10.0.1.0/24)<br>
+  • <strong>db-acg</strong>: ${state.selections.db === 'postgresql' ? 'TCP 5432' : 'TCP 3306'}(10.0.2.0/24), TCP 22(10.0.2.0/24)</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>서버 3대 생성</div>
+  <div class="step-desc">Server → 서버 생성 (3회):<br>
+  • <strong>web-server</strong>: ${osLabel} 이미지, web-subnet, web-acg 선택<br>
+  • <strong>was-server</strong>: ${osLabel} 이미지, was-subnet, was-acg 선택<br>
+  • <strong>db-server</strong>: ${osLabel} 이미지, db-subnet, db-acg 선택<br>
+  권장 스펙: vCPU 2, RAM 4GB (Standard s2-g3)</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">5</span>공인 IP (Floating IP) 할당</div>
+  <div class="step-desc">Server → Public IP → 공인 IP 신청 → web-server에 할당<br>
+  WAS, DB 서버는 외부 접근 불필요 → 공인 IP 미할당 (보안)</div>
+  <div class="note"><strong>비용 주의:</strong> 공인 IP는 할당 시 과금됩니다. 불필요한 IP는 반납하세요.</div>
+</div>`;
+  } else {
+    return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">1</span>VPC 생성</div>
+  <div class="step-desc">AWS 콘솔 → <strong>VPC → Create VPC</strong><br>
+  이름: <code>tutorial-vpc</code>, IPv4 CIDR: <code>10.0.0.0/16</code></div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">2</span>서브넷 3개 생성</div>
+  <div class="step-desc">VPC → Subnets → Create subnet:<br>
+  • <strong>web-subnet</strong>: 10.0.1.0/24, Public<br>
+  • <strong>was-subnet</strong>: 10.0.2.0/24, Private<br>
+  • <strong>db-subnet</strong>: 10.0.3.0/24, Private</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">3</span>Internet Gateway 설정</div>
+  <div class="step-desc">VPC → Internet Gateways → Create → VPC에 Attach<br>
+  Route Tables → web-subnet 라우팅 테이블에 <code>0.0.0.0/0 → IGW</code> 추가</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">4</span>Security Group 생성</div>
+  <div class="step-desc">EC2 → Security Groups → Create (3개):<br>
+  • <strong>web-sg</strong>: HTTP 80, HTTPS 443 (0.0.0.0/0), SSH 22 (My IP)<br>
+  • <strong>was-sg</strong>: 8080 from web-sg, SSH from web-sg<br>
+  • <strong>db-sg</strong>: ${state.selections.db === 'postgresql' ? '5432' : '3306'} from was-sg</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">5</span>EC2 인스턴스 3대 생성</div>
+  <div class="step-desc">EC2 → Launch Instance (3회):<br>
+  • AMI: ${osLabel}<br>
+  • Instance type: t3.medium (2vCPU, 4GiB)<br>
+  • web-server → web-subnet + web-sg + Elastic IP 할당<br>
+  • was-server → was-subnet + was-sg<br>
+  • db-server → db-subnet + db-sg</div>
+</div>`;
+  }
+}
+
+function getMission1CliHtml() {
+  const {webInstall, wasInstall, dbInstall, integrationCmd} = getInstallCommands();
+  const {os, web, was, db} = state.selections;
+  const isRocky = os === 'rocky';
+  return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Web 서버 설치 (web-server에서 실행)</div>
+  <div class="step-desc">${web === 'apache' ? 'Apache HTTP Server' : 'Nginx'} 설치 및 활성화:</div>
+  ${codeBlock('bash', webInstall)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>WAS 설치 (was-server에서 실행)</div>
+  <div class="step-desc">${was === 'tomcat' ? 'Apache Tomcat 10.1' : 'WildFly 31'} + Java 17 설치:</div>
+  ${codeBlock('bash', wasInstall)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>DB 설치 (db-server에서 실행)</div>
+  <div class="step-desc">${db === 'mysql' ? 'MySQL 8.0' : db === 'postgresql' ? 'PostgreSQL 16' : 'MariaDB 10.11'} 설치 및 초기화:</div>
+  ${codeBlock('bash', dbInstall)}
+  <div class="note"><strong>보안:</strong> mysql_secure_installation 실행 시 root 비밀번호 설정, 익명 사용자 제거, 원격 root 로그인 비활성화를 권장합니다.</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>Web-WAS 연동 설정 (web-server에서 실행)</div>
+  <div class="step-desc">WAS_PRIVATE_IP를 실제 WAS 서버의 내부 IP로 교체하세요:</div>
+  ${codeBlock('bash', integrationCmd)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">5</span>DB 초기 설정 및 애플리케이션 DB 생성</div>
+  ${codeBlock('sql', `-- DB 서버에 접속\n${db === 'postgresql' ? 'sudo -u postgres psql' : 'mysql -u root -p'}\n\n-- 애플리케이션용 DB 및 사용자 생성\n${db === 'postgresql'
+    ? `CREATE DATABASE appdb;\nCREATE USER appuser WITH ENCRYPTED PASSWORD 'StrongPass123!';\nGRANT ALL PRIVILEGES ON DATABASE appdb TO appuser;`
+    : `CREATE DATABASE appdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\nCREATE USER 'appuser'@'10.0.2.%' IDENTIFIED BY 'StrongPass123!';\nGRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'10.0.2.%';\nFLUSH PRIVILEGES;`}`)}
+</div>`;
+}
+
+function getMission2Html(tab) {
+  const isAws = state.provider === 'aws';
+  const lbName = isAws ? 'Application Load Balancer(ALB)' : 'Load Balancer';
+  const {os, web} = state.selections;
+  const isRocky = os === 'rocky';
+
+  if (tab === 'console') {
+    return isAws ? `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">1</span>Web/WAS 서버 추가 생성</div>
+  <div class="step-desc">EC2 → Launch Instance로 Web2, WAS2 서버 생성<br>미션 1과 동일한 스펙 및 보안 그룹 적용</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">2</span>Target Group 생성</div>
+  <div class="step-desc">EC2 → Target Groups → Create target group<br>
+  • Type: Instances, Protocol: HTTP, Port: 80<br>
+  • Health check: HTTP /index.html<br>
+  • Web1, Web2 인스턴스 등록</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">3</span>Application Load Balancer 생성</div>
+  <div class="step-desc">EC2 → Load Balancers → Create → Application Load Balancer<br>
+  • Internet-facing, web-subnet(2개 AZ 이상) 선택<br>
+  • 리스너: HTTP:80 → Target Group 연결<br>
+  • ALB DNS명으로 접속 확인</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">4</span>DB Master-Slave 복제 설정</div>
+  <div class="step-desc">DB2 서버 추가 생성 후 복제 설정 (또는 RDS Multi-AZ 사용 권장)</div>
+</div>` : `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Web/WAS 서버 추가 생성</div>
+  <div class="step-desc">Server → 서버 생성으로 Web2, WAS2 서버 추가<br>미션 1과 동일한 설정 적용 후 소프트웨어 설치</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>타겟 그룹 생성</div>
+  <div class="step-desc">Load Balancer → 타겟 그룹 → 타겟 그룹 생성<br>
+  • 프로토콜: HTTP, 포트: 80<br>
+  • 헬스체크 경로: /index.html<br>
+  • Web1, Web2 서버 등록</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>Load Balancer 생성</div>
+  <div class="step-desc">Load Balancer → 로드밸런서 생성<br>
+  • 유형: Application Load Balancer<br>
+  • 서브넷: web-subnet<br>
+  • 리스너: HTTP 80 → 타겟 그룹 연결<br>
+  • ACG에 LB의 IP 대역 허용 추가</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>DB 이중화 (Master-Slave)</div>
+  <div class="step-desc">db-server2 생성 후 복제 설정 또는 Cloud DB for MySQL 사용 권장</div>
+</div>`;
+  } else {
+    const dbRepl = state.selections.db === 'postgresql'
+      ? `# Master 서버 설정 (postgresql.conf)\nsudo sed -i "s/#wal_level = replica/wal_level = replica/" /etc/postgresql/*/main/postgresql.conf\nsudo sed -i "s/#max_wal_senders = 10/max_wal_senders = 3/" /etc/postgresql/*/main/postgresql.conf\n\n# pg_hba.conf에 slave 접근 허용\necho "host replication replicator DB_SLAVE_IP/32 md5" | sudo tee -a /etc/postgresql/*/main/pg_hba.conf\nsudo systemctl restart postgresql\n\n# 복제 사용자 생성\nsudo -u postgres psql -c "CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'ReplPass123!';"`
+      : `# Master 서버 설정 (/etc/mysql/mysql.conf.d/mysqld.cnf)\nsudo tee -a /etc/mysql/mysql.conf.d/mysqld.cnf << 'EOF'\n[mysqld]\nserver-id = 1\nlog_bin = /var/log/mysql/mysql-bin.log\nbinlog_do_db = appdb\nEOF\nsudo systemctl restart mysql\n\n# 복제 사용자 생성\nmysql -u root -p -e "CREATE USER 'replicator'@'DB_SLAVE_IP' IDENTIFIED BY 'ReplPass123!'; GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'DB_SLAVE_IP'; FLUSH PRIVILEGES;"`;
+    return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Web2 서버 소프트웨어 설치</div>
+  <div class="step-desc">미션 1 CLI 가이드의 1번, 4번 단계를 Web2 서버에 동일하게 적용</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>WAS2 서버 소프트웨어 설치</div>
+  <div class="step-desc">미션 1 CLI 가이드의 2번 단계를 WAS2 서버에 동일하게 적용</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>DB 이중화 설정</div>
+  ${codeBlock('bash', dbRepl)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>헬스체크 페이지 생성 (각 Web 서버)</div>
+  ${codeBlock('bash', `# 헬스체크용 index.html 생성\necho "<html><body>OK</body></html>" | sudo tee ${web === 'apache' ? (isRocky ? '/var/www/html/index.html' : '/var/www/html/index.html') : '/usr/share/nginx/html/index.html'}`)}
+</div>`;
+  }
+}
+
+function getMission3Html(tab) {
+  const isAws = state.provider === 'aws';
+  const {os} = state.selections;
+  const isRocky = os === 'rocky';
+
+  if (tab === 'console') {
+    return isAws ? `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">1</span>ElastiCache Redis 생성</div>
+  <div class="step-desc">ElastiCache → Redis OSS Caches → Create<br>
+  • 클러스터 모드: Disabled (단순 구성)<br>
+  • 노드 유형: cache.t3.micro<br>
+  • VPC: tutorial-vpc, was-subnet 선택<br>
+  • 보안 그룹: was-sg에서 6379 포트 허용</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">2</span>애플리케이션 세션 설정</div>
+  <div class="step-desc">ElastiCache Primary Endpoint를 애플리케이션 설정에 등록<br>
+  Spring Session + Spring Data Redis 사용 시 자동 세션 공유 가능</div>
+</div>` : `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Cloud DB for Redis 생성 (관리형)</div>
+  <div class="step-desc">NCP 콘솔 → Database → Cloud DB for Redis → Redis 생성<br>
+  • 서비스 이름: tutorial-redis<br>
+  • VPC: tutorial-vpc, was-subnet<br>
+  • Redis 버전: 7.x<br>
+  • 자동 백업 활성화</div>
+  <div class="note"><strong>대안:</strong> 직접 설치를 원하면 아래 CLI 가이드를 참고하세요.</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>ACG에 Redis 포트 추가</div>
+  <div class="step-desc">was-acg → 인바운드 규칙 추가:<br>
+  TCP 6379 from was-subnet (10.0.2.0/24)</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>Tomcat 세션 관리자 설정</div>
+  <div class="step-desc">tomcat-redis-session-manager 라이브러리를 Tomcat lib에 추가<br>
+  context.xml에 Redis 연결 정보 설정</div>
+</div>`;
+  } else {
+    return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Redis 직접 설치 (WAS 서버 또는 별도 서버)</div>
+  ${codeBlock('bash', isRocky
+    ? `sudo dnf install -y redis\nsudo systemctl enable --now redis\n\n# 외부 접근 허용 설정 (was-subnet 내부 통신)\nsudo sed -i 's/bind 127.0.0.1/bind 0.0.0.0/' /etc/redis/redis.conf\nsudo sed -i 's/# requirepass foobared/requirepass RedisPass123!/' /etc/redis/redis.conf\nsudo systemctl restart redis`
+    : `sudo apt install -y redis-server\nsudo systemctl enable --now redis-server\n\n# 외부 접근 허용\nsudo sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0/' /etc/redis/redis.conf\nsudo sed -i 's/# requirepass foobared/requirepass RedisPass123!/' /etc/redis/redis.conf\nsudo systemctl restart redis-server`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>Redis 연결 테스트</div>
+  ${codeBlock('bash', `redis-cli -h REDIS_PRIVATE_IP -a RedisPass123! ping\n# 응답: PONG`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>Tomcat Redis 세션 설정 (context.xml)</div>
+  ${codeBlock('xml', `<!-- /opt/tomcat/conf/context.xml -->\n<Context>\n  <Valve className="com.orangefunction.tomcat.redissessions.RedisSessionHandlerValve" />\n  <Manager className="com.orangefunction.tomcat.redissessions.RedisSessionManager"\n           host="REDIS_PRIVATE_IP"\n           port="6379"\n           password="RedisPass123!"\n           database="0"\n           maxInactiveInterval="60" />\n</Context>`)}
+  <div class="note"><strong>라이브러리:</strong> tomcat-redis-session-manager-3.x.jar를 /opt/tomcat/lib/에 복사하세요.</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>Spring Boot Redis 세션 설정</div>
+  ${codeBlock('yaml', `# application.yml\nspring:\n  session:\n    store-type: redis\n  data:\n    redis:\n      host: REDIS_PRIVATE_IP\n      port: 6379\n      password: RedisPass123!`)}
+</div>`;
+  }
+}
+
+function getMission4Html(tab) {
+  const isAws = state.provider === 'aws';
+  const {os, web} = state.selections;
+  const isRocky = os === 'rocky';
+  const webPkg = web === 'apache' ? (isRocky ? 'python3-certbot-apache' : 'python3-certbot-apache') : (isRocky ? 'python3-certbot-nginx' : 'python3-certbot-nginx');
+  const certbotPlugin = web === 'apache' ? '--apache' : '--nginx';
+
+  if (tab === 'console') {
+    return isAws ? `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">1</span>ACM 인증서 요청</div>
+  <div class="step-desc">AWS Certificate Manager → Request certificate<br>
+  • 도메인: yourdomain.com, *.yourdomain.com<br>
+  • 검증 방법: DNS 검증 (Route 53 사용 시 자동 검증 가능)<br>
+  • 상태가 "발급됨"이 될 때까지 대기</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">2</span>ALB에 HTTPS 리스너 추가</div>
+  <div class="step-desc">EC2 → Load Balancers → 기존 ALB 선택 → Listeners → Add listener<br>
+  • Protocol: HTTPS, Port: 443<br>
+  • ACM 인증서 선택<br>
+  • 동작: Forward to Target Group</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">3</span>HTTP → HTTPS 리다이렉트</div>
+  <div class="step-desc">ALB HTTP:80 리스너 편집 → 동작을 "Redirect to HTTPS"로 변경</div>
+</div>` : `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Certificate Manager 인증서 신청</div>
+  <div class="step-desc">NCP 콘솔 → Security → Certificate Manager → 인증서 신청<br>
+  • 인증서 유형: DV(Domain Validation)<br>
+  • 도메인: yourdomain.com<br>
+  • DNS 또는 이메일 검증 선택</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>Load Balancer SSL 리스너 추가</div>
+  <div class="step-desc">Load Balancer → 기존 LB 선택 → 리스너 추가<br>
+  • 프로토콜: HTTPS, 포트: 443<br>
+  • Certificate Manager에서 발급된 인증서 선택<br>
+  • 타겟 그룹 연결</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>HTTP → HTTPS 리다이렉트</div>
+  <div class="step-desc">HTTP:80 리스너를 HTTPS:443으로 리다이렉트 설정<br>
+  또는 Web 서버 설정에서 직접 리다이렉트</div>
+</div>`;
+  } else {
+    return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Certbot 설치 (Let's Encrypt)</div>
+  ${codeBlock('bash', isRocky
+    ? `sudo dnf install -y epel-release\nsudo dnf install -y certbot ${webPkg}`
+    : `sudo apt install -y certbot ${webPkg}`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>인증서 발급 및 자동 설정</div>
+  ${codeBlock('bash', `sudo certbot ${certbotPlugin} -d yourdomain.com -d www.yourdomain.com\n# 이메일 입력, 약관 동의, HTTP 리다이렉트 여부 선택`)}
+  <div class="note"><strong>주의:</strong> 도메인이 서버 IP를 가리키고 있어야 합니다. 방화벽에서 443 포트가 열려 있어야 합니다.</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>자동 갱신 설정 확인</div>
+  ${codeBlock('bash', `# 갱신 테스트\nsudo certbot renew --dry-run\n\n# 크론탭 확인 (자동으로 추가됨)\nsudo crontab -l | grep certbot\n\n# 또는 systemd timer 확인\nsudo systemctl status certbot.timer`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>HTTP → HTTPS 강제 리다이렉트</div>
+  ${codeBlock('bash', web === 'apache'
+    ? `# /etc/httpd/conf.d/redirect.conf 또는 /etc/apache2/sites-available/redirect.conf\ncat << 'EOF' | sudo tee ${isRocky ? '/etc/httpd/conf.d/redirect.conf' : '/etc/apache2/sites-available/redirect.conf'}\n<VirtualHost *:80>\n    ServerName yourdomain.com\n    Redirect permanent / https://yourdomain.com/\n</VirtualHost>\nEOF\n${isRocky ? 'sudo systemctl restart httpd' : 'sudo systemctl restart apache2'}`
+    : `# nginx HTTP 리다이렉트 설정\ncat << 'EOF' | sudo tee /etc/nginx/conf.d/redirect.conf\nserver {\n    listen 80;\n    server_name yourdomain.com;\n    return 301 https://\\$host\\$request_uri;\n}\nEOF\nsudo nginx -t && sudo systemctl restart nginx`)}
+</div>`;
+  }
+}
+
+function getMission5Html(tab) {
+  const isAws = state.provider === 'aws';
+  const {os} = state.selections;
+  const isRocky = os === 'rocky';
+
+  if (tab === 'console') {
+    return isAws ? `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">1</span>AMI(서버 이미지) 생성</div>
+  <div class="step-desc">EC2 → 기존 web-server 인스턴스 → Actions → Image → Create image<br>
+  • 이미지 이름: web-ami-v1<br>
+  • No reboot 체크 해제 권장 (일관성 보장)</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">2</span>Launch Template 생성</div>
+  <div class="step-desc">EC2 → Launch Templates → Create<br>
+  • AMI: 생성한 web-ami-v1 선택<br>
+  • Instance type: t3.medium<br>
+  • Security group: web-sg<br>
+  • User data에 시작 스크립트 추가</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">3</span>Auto Scaling Group 생성</div>
+  <div class="step-desc">EC2 → Auto Scaling Groups → Create<br>
+  • Launch template 선택<br>
+  • VPC: tutorial-vpc, web-subnet<br>
+  • 최소: 2, 희망: 2, 최대: 6<br>
+  • Load balancer: ALB Target Group 연결</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">4</span>Scaling Policy 설정</div>
+  <div class="step-desc">Auto Scaling Group → Automatic scaling → Create scaling policy<br>
+  • Target tracking: CPU 60%<br>
+  • Warm-up: 300초</div>
+</div>` : `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>서버 이미지 생성</div>
+  <div class="step-desc">Server → 서버 이미지 → 이미지 생성<br>
+  • web-server 선택 → 이미지 이름: web-image-v1<br>
+  • 이미지 생성 완료까지 대기 (수 분 소요)</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>오토스케일링 Launch Configuration 생성</div>
+  <div class="step-desc">Auto Scaling → Launch Configuration → 생성<br>
+  • 서버 이미지: web-image-v1<br>
+  • 서버 타입, ACG, 서브넷 선택</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>오토스케일링 그룹 생성</div>
+  <div class="step-desc">Auto Scaling → 오토스케일링 그룹 → 생성<br>
+  • Launch Configuration 선택<br>
+  • 최소: 2, 최대: 6, 기대: 2<br>
+  • Load Balancer 타겟 그룹 연결</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>스케일링 정책 설정</div>
+  <div class="step-desc">CPU 사용률 60% 초과 시 스케일 아웃, 30% 미만 시 스케일 인 설정</div>
+</div>`;
+  } else {
+    return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>User Data 스크립트 준비</div>
+  <div class="step-desc">Auto Scaling으로 생성된 인스턴스가 자동으로 설정되도록 User Data 스크립트 작성:</div>
+  ${codeBlock('bash', `#!/bin/bash\n# User Data 스크립트 (인스턴스 첫 기동 시 자동 실행)\n${isRocky
+    ? `dnf install -y httpd\nsystemctl enable --now httpd\nfirewall-cmd --permanent --add-service=http && firewall-cmd --reload`
+    : `apt update && apt install -y nginx\nsystemctl enable --now nginx`}\n\n# 헬스체크 페이지\necho "OK" > ${isRocky ? '/var/www/html/health' : '/usr/share/nginx/html/health'}`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>스케일링 이벤트 로그 확인</div>
+  ${codeBlock('bash', `# 오토스케일링 활동 로그 (AWS CLI)\naws autoscaling describe-scaling-activities \\\n  --auto-scaling-group-name web-asg \\\n  --max-items 10\n\n# 현재 인스턴스 목록\naws autoscaling describe-auto-scaling-instances \\\n  --query 'AutoScalingInstances[*].[InstanceId,HealthStatus,LifecycleState]'`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>강제 스케일 테스트 (CPU 부하)</div>
+  ${codeBlock('bash', `# stress-ng 설치 후 CPU 부하 발생\n${isRocky ? 'sudo dnf install -y stress-ng' : 'sudo apt install -y stress-ng'}\nsudo stress-ng --cpu 4 --timeout 300s\n\n# 별도 터미널에서 모니터링\nwatch -n 5 "uptime && free -h"`)}
+</div>`;
+  }
+}
+
+function getMission6Html(tab) {
+  const isAws = state.provider === 'aws';
+  const {os} = state.selections;
+  const isRocky = os === 'rocky';
+
+  if (tab === 'console') {
+    return isAws ? `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">1</span>CloudWatch Agent 설정</div>
+  <div class="step-desc">Systems Manager → Parameter Store에 CloudWatch 설정 저장 또는<br>
+  각 인스턴스에서 CloudWatch Agent wizard 실행</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">2</span>대시보드 생성</div>
+  <div class="step-desc">CloudWatch → Dashboards → Create dashboard<br>
+  • EC2 CPU Utilization, 메모리, 디스크 I/O 위젯 추가<br>
+  • ALB RequestCount, TargetResponseTime 추가</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">3</span>알람 설정</div>
+  <div class="step-desc">CloudWatch → Alarms → Create alarm<br>
+  • CPU > 80% → SNS 토픽으로 이메일/SMS 알림<br>
+  • StatusCheckFailed_Instance → 즉시 알림</div>
+</div>` : `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Cloud Monitoring 에이전트 설치</div>
+  <div class="step-desc">각 서버에 NCP Monitoring 에이전트 설치 필요<br>
+  (CLI 가이드 참고)</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>대시보드 구성</div>
+  <div class="step-desc">Management → Cloud Monitoring → 대시보드<br>
+  • CPU, 메모리, 디스크, 네트워크 메트릭 위젯 추가<br>
+  • 서버별 그룹화</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>알람 규칙 생성</div>
+  <div class="step-desc">Cloud Monitoring → 알람 → 알람 규칙 생성<br>
+  • CPU 사용률 80% 초과 → 이메일/SMS 통보<br>
+  • 메모리 90% 초과 → 즉시 알림<br>
+  • 디스크 사용률 85% 초과 → 경고</div>
+</div>`;
+  } else {
+    return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>NCP Monitoring 에이전트 설치</div>
+  ${codeBlock('bash', `# 모든 서버에 설치 (NCP 전용)\nwget https://monitoring.ncloud.com/downloads/agent/linux/install.sh\nsudo bash install.sh\n\n# 에이전트 상태 확인\nsudo systemctl status ncp-monitoring-agent`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>AWS CloudWatch Agent 설치 (AWS 환경)</div>
+  ${codeBlock('bash', isRocky
+    ? `# Rocky Linux on AWS\nsudo dnf install -y amazon-cloudwatch-agent\n\n# 설정 마법사 실행\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard\n\n# 에이전트 시작\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -s \\\n  -c ssm:/AmazonCloudWatch-linux`
+    : `# Ubuntu on AWS\nwget https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb\nsudo dpkg -i amazon-cloudwatch-agent.deb\n\n# 설정 마법사\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>node_exporter + Prometheus 설정 (범용)</div>
+  ${codeBlock('bash', `# Prometheus node_exporter 설치\nwget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz\ntar xvf node_exporter-1.7.0.linux-amd64.tar.gz\nsudo mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/\n\n# systemd 서비스 등록\nsudo tee /etc/systemd/system/node_exporter.service << 'EOF'\n[Unit]\nDescription=Node Exporter\n[Service]\nUser=nobody\nExecStart=/usr/local/bin/node_exporter\n[Install]\nWantedBy=multi-user.target\nEOF\nsudo systemctl enable --now node_exporter\n\n# 메트릭 확인\ncurl http://localhost:9100/metrics | head -20`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>로그 중앙화 (rsyslog)</div>
+  ${codeBlock('bash', `# 로그 서버에서 rsyslog 수신 설정\nsudo sed -i 's/#module(load="imudp")/module(load="imudp")/' /etc/rsyslog.conf\nsudo sed -i 's/#input(type="imudp" port="514")/input(type="imudp" port="514")/' /etc/rsyslog.conf\nsudo systemctl restart rsyslog\n\n# 각 서버에서 로그 서버로 전송 설정\necho "*.* @LOG_SERVER_IP:514" | sudo tee -a /etc/rsyslog.conf\nsudo systemctl restart rsyslog`)}
+</div>`;
+  }
+}
+
+function getMission7Html(tab) {
+  const isAws = state.provider === 'aws';
+  const {os} = state.selections;
+  const isRocky = os === 'rocky';
+
+  if (tab === 'console') {
+    return isAws ? `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">1</span>S3 버킷 생성 (정적 리소스)</div>
+  <div class="step-desc">S3 → Create bucket<br>
+  • 버킷 이름: tutorial-static-assets<br>
+  • 퍼블릭 액세스 차단: CloudFront OAC 사용 시 유지<br>
+  • 정적 파일(이미지, CSS, JS) 업로드</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">2</span>CloudFront 배포 생성</div>
+  <div class="step-desc">CloudFront → Create distribution<br>
+  • Origin: S3 버킷 또는 ALB DNS<br>
+  • OAC(Origin Access Control) 설정으로 S3 직접 접근 차단<br>
+  • 캐시 정책: CachingOptimized<br>
+  • Alternate domain: 커스텀 도메인 (선택)</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num aws-mode">3</span>캐시 무효화</div>
+  <div class="step-desc">CloudFront → 배포 선택 → Invalidations → Create invalidation<br>
+  • /static/* 또는 특정 경로 무효화<br>
+  • 배포 업데이트 후 캐시 클리어</div>
+</div>` : `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>Object Storage 버킷 생성</div>
+  <div class="step-desc">NCP 콘솔 → Storage → Object Storage → 버킷 생성<br>
+  • 버킷 이름: tutorial-static<br>
+  • 접근 권한: Public Read (정적 리소스)</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>CDN+ 서비스 생성</div>
+  <div class="step-desc">CDN → CDN+ → CDN 서비스 생성<br>
+  • 서비스 프로토콜: HTTPS<br>
+  • 원본 유형: Object Storage 또는 Custom (서버 IP)<br>
+  • 원본 도메인: Object Storage 엔드포인트<br>
+  • CDN 도메인 확인 후 DNS CNAME 등록</div>
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>캐시 설정 최적화</div>
+  <div class="step-desc">CDN 서비스 → 캐시 규칙 설정<br>
+  • 이미지(jpg,png,gif,webp): 7일<br>
+  • CSS/JS: 1일 (버전 해시 사용 시 더 길게)<br>
+  • HTML: 5분</div>
+</div>`;
+  } else {
+    return `
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">1</span>정적 리소스 분리 및 업로드</div>
+  ${codeBlock('bash', `# AWS CLI로 S3 업로드\naws s3 sync ./static/ s3://tutorial-static-assets/ \\\n  --cache-control "max-age=86400" \\\n  --exclude "*.html"\n\n# NCP Object Storage (s3 호환 API)\naws s3 sync ./static/ s3://tutorial-static/ \\\n  --endpoint-url=https://kr.object.ncloudstorage.com \\\n  --cache-control "max-age=86400"`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">2</span>Nginx CDN 헤더 설정</div>
+  ${codeBlock('nginx', `# /etc/nginx/conf.d/static.conf\nserver {\n    listen 80;\n    server_name static.yourdomain.com;\n    \n    root /var/www/static;\n    \n    # 캐시 헤더 설정\n    location ~* \\.(jpg|jpeg|png|gif|ico|svg|webp)$ {\n        expires 7d;\n        add_header Cache-Control "public, immutable";\n    }\n    location ~* \\.(css|js)$ {\n        expires 1d;\n        add_header Cache-Control "public";\n    }\n    \n    # CORS 허용\n    add_header Access-Control-Allow-Origin *;\n    \n    # gzip 압축\n    gzip on;\n    gzip_types text/css application/javascript image/svg+xml;\n}`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">3</span>CloudFront 캐시 무효화 (AWS)</div>
+  ${codeBlock('bash', `# 배포 ID 확인\naws cloudfront list-distributions --query 'DistributionList.Items[*].[Id,DomainName]'\n\n# 캐시 무효화 (새 배포 후 실행)\naws cloudfront create-invalidation \\\n  --distribution-id EDFDVBD6EXAMPLE \\\n  --paths "/*"\n\n# 특정 경로만\naws cloudfront create-invalidation \\\n  --distribution-id EDFDVBD6EXAMPLE \\\n  --paths "/static/css/*" "/static/js/*"`)}
+</div>
+<div class="guide-step">
+  <div class="step-title"><span class="step-num">4</span>성능 측정</div>
+  ${codeBlock('bash', `# Apache Bench로 부하 테스트\nsudo ${isRocky ? 'dnf install -y httpd-tools' : 'apt install -y apache2-utils'}\n\n# CDN 적용 전 (오리진 직접)\nab -n 1000 -c 50 https://yourdomain.com/static/logo.png\n\n# CDN 적용 후 (캐시 히트)\nab -n 1000 -c 50 https://cdn.yourdomain.com/static/logo.png\n\n# 응답 헤더에서 X-Cache: Hit 확인\ncurl -I https://cdn.yourdomain.com/static/logo.png`)}
+</div>`;
+  }
+}
+
+// ===================== CHECKLISTS =====================
+const CHECKLISTS = {
+  1: [
+    'VPC 생성 완료 (CIDR 10.0.0.0/16)',
+    '서브넷 3개 생성 (Web/WAS/DB)',
+    'ACG/보안그룹 3개 생성 및 규칙 설정',
+    'Web 서버 생성 및 공인 IP 할당',
+    'WAS 서버 생성 (Private 서브넷)',
+    'DB 서버 생성 (Private 서브넷)',
+    '웹 서버 소프트웨어 설치 및 실행 확인',
+    'Web → WAS → DB 연동 확인',
+  ],
+  2: [
+    'Web2, WAS2 서버 추가 생성',
+    '각 서버에 소프트웨어 설치',
+    'Load Balancer / ALB 생성',
+    '타겟 그룹에 Web1, Web2 등록',
+    '헬스체크 정상 동작 확인',
+    'DB Master-Slave 복제 설정',
+    'LB DNS로 접속 및 로드 분산 확인',
+  ],
+  3: [
+    'Redis 서버 생성 또는 관리형 Redis 생성',
+    'ACG/보안그룹에 Redis 포트(6379) 허용',
+    'Redis 연결 테스트 (PING-PONG)',
+    'Tomcat/WAS에 Redis 세션 매니저 설정',
+    '세션 공유 동작 확인 (Web1 → Web2 전환)',
+    'Redis CLI로 세션 키 저장 확인',
+  ],
+  4: [
+    '도메인 DNS 설정 완료',
+    'SSL 인증서 발급 (ACM 또는 Let\'s Encrypt)',
+    'Load Balancer에 HTTPS 리스너 추가',
+    'HTTP → HTTPS 리다이렉트 설정',
+    'HTTPS 접속 및 인증서 유효성 확인',
+    'SSL Labs 테스트 A등급 이상 확인',
+  ],
+  5: [
+    '서버 이미지(AMI) 생성',
+    'Launch Template/Configuration 생성',
+    'Auto Scaling Group 생성 (최소 2대)',
+    'Scaling Policy 설정 (CPU 60%)',
+    'Load Balancer와 Auto Scaling 연동',
+    'CPU 부하 테스트로 스케일 아웃 확인',
+    '스케일 인 동작 확인',
+  ],
+  6: [
+    '모니터링 에이전트 전 서버 설치',
+    'CPU/메모리/디스크 메트릭 수집 확인',
+    '모니터링 대시보드 구성',
+    'CPU 80% 초과 알람 생성',
+    '메모리 90% 초과 알람 생성',
+    '알람 알림 수신 테스트 (이메일/SMS)',
+    '로그 중앙화 설정',
+  ],
+  7: [
+    'Object Storage / S3 버킷 생성',
+    '정적 리소스 업로드',
+    'CDN+ / CloudFront 배포 생성',
+    '오리진 설정 및 캐시 정책 구성',
+    'CDN URL로 리소스 접근 확인',
+    'X-Cache: Hit 헤더 확인',
+    '애플리케이션 정적 리소스 URL을 CDN으로 변경',
+    '성능 개선 측정 및 확인',
+  ],
+};
+
+// ===================== RENDER MAIN =====================
+function renderMain() {
+  codeBlockIndex = 0;
+  const m = MISSIONS[state.currentMission - 1];
+  const isAws = state.provider === 'aws';
+  const modeClass = isAws ? ' aws-mode' : '';
+  const checks = state.checks[state.currentMission] || {};
+  const checklist = CHECKLISTS[state.currentMission];
+  const checkedCount = checklist.filter((_, i) => checks[i]).length;
+  const allChecked = checkedCount === checklist.length;
+
+  let guideHtml = '';
+  const tab = state.guideTab;
+
+  switch(state.currentMission) {
+    case 1:
+      guideHtml = tab === 'console' ? getMission1ConsoleHtml() : getMission1CliHtml();
+      break;
+    case 2:
+      guideHtml = getMission2Html(tab);
+      break;
+    case 3:
+      guideHtml = getMission3Html(tab);
+      break;
+    case 4:
+      guideHtml = getMission4Html(tab);
+      break;
+    case 5:
+      guideHtml = getMission5Html(tab);
+      break;
+    case 6:
+      guideHtml = getMission6Html(tab);
+      break;
+    case 7:
+      guideHtml = getMission7Html(tab);
+      break;
+  }
+
+  const checklistHtml = checklist.map((item, i) =>
+    `<div class="check-item${checks[i] ? ' checked' : ''}" onclick="toggleCheck(${i})">
+      <input type="checkbox" ${checks[i] ? 'checked' : ''} onchange="toggleCheck(${i})" onclick="event.stopPropagation()">
+      <label>${item}</label>
+    </div>`
+  ).join('');
+
+  const mainArea = document.getElementById('mainArea');
+  mainArea.innerHTML = `
+    <div class="mission-header">
+      <div class="mission-title-row">
+        <span class="mission-num${modeClass}">미션 ${m.id}</span>
+        <h2 class="mission-title">${m.icon} ${m.name}</h2>
+        ${state.cleared.includes(m.id) ? '<span style="color:var(--success);font-size:14px">✅ 완료됨</span>' : ''}
+      </div>
+      <div class="mission-desc">${getMissionDesc(m.id)}</div>
+    </div>
+
+    <div class="arch-box">
+      <div class="arch-title">아키텍처 다이어그램</div>
+      ${getArchHtml(m.id)}
+    </div>
+
+    ${m.id <= 2 ? renderSelectors() : `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--text2)">
+      현재 선택: <span style="color:var(--text)">${getOsLabel()} + ${getWebLabel()} + ${getWasLabel()} + ${getDbLabel()}</span>
+      <a href="#" onclick="state.currentMission=1;renderMain();return false" style="color:var(--accent);margin-left:12px;text-decoration:none">변경하기 →</a>
+    </div>`}
+
+    <div class="guide-box">
+      <div class="guide-tabs">
+        <button class="guide-tab${tab==='console'?' active'+modeClass:''}" onclick="switchTab('console')">🖥️ 콘솔 가이드</button>
+        <button class="guide-tab${tab==='cli'?' active'+modeClass:''}" onclick="switchTab('cli')">💻 CLI 가이드</button>
+      </div>
+      <div class="guide-content active">
+        ${guideHtml}
+      </div>
+    </div>
+
+    <div class="checklist-box">
+      <div class="checklist-title">
+        ✅ 미션 체크리스트
+        <span class="checklist-progress">${checkedCount} / ${checklist.length}</span>
+      </div>
+      ${checklistHtml}
+    </div>
+
+    <button class="clear-btn${allChecked ? ' ready' + modeClass : ''}" onclick="${allChecked ? 'triggerMissionClear()' : 'alert(\"모든 체크리스트를 완료하세요!\")'}" id="clearBtn">
+      ${allChecked ? '🎉 미션 클리어!' : `${checkedCount}/${checklist.length} 완료 후 미션 클리어 가능`}
+    </button>
+  `;
+}
+
+function getMissionDesc(id) {
+  const descs = {
+    1: '가장 기본적인 3-Tier 아키텍처를 구성합니다. Web 서버, WAS(애플리케이션 서버), DB 서버를 각 1대씩 별도 서브넷에 배치합니다.',
+    2: '단중화 구성을 2배로 확장하고 Load Balancer를 앞단에 배치합니다. 단일 장애 포인트(SPOF)를 제거하고 고가용성을 달성합니다.',
+    3: '이중화 구성에 Redis를 추가하여 세션을 공유합니다. 어느 Web/WAS 서버로 요청이 가더라도 동일한 세션을 유지합니다.',
+    4: 'SSL/TLS 인증서를 발급하고 HTTPS를 적용합니다. 데이터 암호화와 신뢰할 수 있는 통신 채널을 구축합니다.',
+    5: '트래픽에 따라 자동으로 서버를 추가/제거하는 오토스케일링을 구성합니다. 비용 효율적이고 탄력적인 인프라를 만듭니다.',
+    6: '서버의 메트릭과 로그를 수집하고 이상 시 알림을 받는 모니터링 시스템을 구축합니다.',
+    7: 'CDN을 통해 정적 리소스를 엣지 서버에서 제공합니다. 사용자와 가까운 서버에서 리소스를 전달해 속도를 높입니다.',
+  };
+  return descs[id];
+}
+
+function getOsLabel() { return state.selections.os === 'rocky' ? 'Rocky Linux 8' : 'Ubuntu 22.04'; }
+function getWebLabel() { return state.selections.web === 'apache' ? 'Apache 2.4' : 'Nginx 1.24'; }
+function getWasLabel() { return state.selections.was === 'tomcat' ? 'Tomcat 10.1' : 'WildFly 31'; }
+function getDbLabel() {
+  const d = state.selections.db;
+  return d === 'mysql' ? 'MySQL 8.0' : d === 'postgresql' ? 'PostgreSQL 16' : 'MariaDB 10.11';
+}
+
+function switchTab(tab) {
+  state.guideTab = tab;
+  saveState();
+  renderMain();
+}
+
+// ===================== CHECKLIST =====================
+function toggleCheck(idx) {
+  if (!state.checks[state.currentMission]) state.checks[state.currentMission] = {};
+  state.checks[state.currentMission][idx] = !state.checks[state.currentMission][idx];
+  saveState();
+  renderMain();
+}
+
+// ===================== MISSION CLEAR =====================
+function triggerMissionClear() {
+  const isAws = state.provider === 'aws';
+  // Play sound
+  playBeep();
+  // Show overlay
+  const overlay = document.getElementById('clearOverlay');
+  const card = document.getElementById('clearCard');
+  const title = document.getElementById('clearTitle');
+  card.className = 'clear-card' + (isAws ? ' aws-mode' : '');
+  title.className = 'clear-title' + (isAws ? ' aws-mode' : '');
+  document.getElementById('clearSub').textContent = `미션 ${state.currentMission}: ${MISSIONS[state.currentMission-1].name} 완료!`;
+  document.getElementById('clearNextBtn').className = 'clear-next-btn' + (isAws ? ' aws-mode' : '');
+  document.getElementById('clearNextBtn').style.display = state.currentMission < 7 ? '' : 'none';
+  overlay.classList.add('show');
+
+  // Star animation
+  ['s1','s2','s3'].forEach((id, i) => {
+    setTimeout(() => { document.getElementById(id).classList.add('lit'); }, i * 300 + 200);
+  });
+
+  // Mark cleared
+  if (!state.cleared.includes(state.currentMission)) {
+    state.cleared.push(state.currentMission);
+    saveState();
+  }
+  renderProgress();
+  renderSidebar();
+}
+
+function closeClearOverlay() {
+  document.getElementById('clearOverlay').classList.remove('show');
+  ['s1','s2','s3'].forEach(id => document.getElementById(id).classList.remove('lit'));
+}
+
+function goNextMission() {
+  const next = state.currentMission + 1;
+  if (next <= 7) {
+    closeClearOverlay();
+    selectMission(next);
+  }
+}
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.15);
+      osc.start(ctx.currentTime + i * 0.1);
+      osc.stop(ctx.currentTime + i * 0.1 + 0.2);
+    });
+  } catch(e) {}
+}
+
+// ===================== RENDER ALL =====================
+function renderAll() {
+  renderProgress();
+  renderSidebar();
+  renderMain();
+}
+
+// ===================== INIT =====================
+loadState();
+applyProviderTheme();
+renderAll();
+</script>
+</body>
+</html>
