@@ -1,0 +1,12 @@
+.DS_Store
+.claude/settings.local.json
+output/*/node_modules/
+output/*/src/node_modules/
+output/**/.env
+output/**/db.json
+output/**/db.json.bak*
+output/**/download/
+output/**/*.bak.*
+output/**/*.bak.phase*
+output/**/Installing
+output/**/Searching

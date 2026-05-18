@@ -1,0 +1,17 @@
+{
+  "workflow_type": "enhance",
+  "source_path": "/Users/macbook/Desktop/tech2-business-platform",
+  "requirements_mode": "A",
+  "code_review_enabled": true,
+  "demo_gate_enabled": false,
+  "deploy_target": "compose",
+  "retry_limits": {
+    "requirements": 2,
+    "analyst": 2,
+    "architect": 2,
+    "code": 3,
+    "devops": 2
+  },
+  "coverage_threshold": 60,
+  "first_run": false
+}

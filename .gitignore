@@ -1,0 +1,4 @@
+.DS_Store
+풀스텍개발/output/*/node_modules/
+풀스텍개발/output/**/.env
+풀스텍개발/output/**/db.json
