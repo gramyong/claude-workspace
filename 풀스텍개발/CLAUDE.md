@@ -1,7 +1,8 @@
 # 풀스택 멀티 에이전트 빌더 — 오케스트레이터
 
-> 자연어 요구사항을 입력하면 8개 서브에이전트 팀이 협업하여 풀스택 어플리케이션을 **신규 생성**하거나 **기존 서비스를 고도화**한다.
-> 설계서: `design.md` (v0.2.0)
+> 자연어 요구사항을 입력하면 3개 서브에이전트(architect / developer / reviewer)가 협업하여
+> 풀스택 어플리케이션을 **신규 생성**하거나 **기존 서비스를 고도화**한다.
+> 설계서: `design.md` (v0.3.0)
 
 ---
 
@@ -38,12 +39,10 @@ mkdir -p output/$run_id/logs
 `config/settings.json`이 없으면 기본값으로 생성:
 ```json
 {
-  "requirements_mode": "A",
-  "code_review_enabled": true,
-  "demo_gate_enabled": false,
+  "requirements_mode": "C",
   "deploy_target": "compose",
-  "retry_limits": { "requirements": 2, "analyst": 2, "architect": 2, "code": 3, "devops": 2 },
-  "coverage_threshold": 60,
+  "retry_limits": { "architect": 2, "developer": 3, "reviewer": 2 },
+  "coverage_threshold": 80,
   "first_run": true
 }
 ```
@@ -55,28 +54,16 @@ mkdir -p output/$run_id/logs
 2. 경로가 존재하는지 확인
 3. `state.json`의 `source_path`에 저장
 
-### 2.4 최초 실행 시 코드 리뷰 질문
-`settings.json`의 `first_run`이 `true`이면:
-> "코드 리뷰를 진행할까요? 보안·가독성·로직 오류를 검토하지만 처리 시간과 토큰 비용이 추가됩니다. (Y/N)"
-
-답변에 따라 `code_review_enabled` 업데이트 후 `first_run: false` 저장.
-
-### 2.5 state.json 초기화
+### 2.4 state.json 초기화
 `output/{run_id}/state.json` 생성:
 ```json
 {
   "run_id": "{run_id}",
   "workflow_type": "{create | enhance}",
   "source_path": "{경로 또는 null}",
-  "mode": "{settings.requirements_mode}",
-  "current_step": "requirements",
-  "code_review_enabled": "{settings.code_review_enabled}",
-  "demo_gate_enabled": false,
-  "deploy_target": "compose",
+  "current_step": "architect",
   "gates_passed": [],
-  "be_status": "pending",
-  "fe_status": "pending",
-  "retries": { "requirements": 0, "analyst": 0, "architect": 0, "code": 0, "devops": 0 }
+  "retries": { "architect": 0, "developer": 0, "reviewer": 0 }
 }
 ```
 
@@ -87,33 +74,25 @@ mkdir -p output/$run_id/logs
 ### 3.1 신규 개발 실행 순서 (workflow_type: "create")
 
 ```
-단계 1: requirements-analyst   (순차)
-  → G1 게이트
-단계 2: architect               (순차)
-  → G2 게이트
-단계 3+4: backend-developer + frontend-developer  (병렬)
-  → [code_review_enabled?] → 단계 5
-단계 5: code-reviewer           (옵션, 순차)
-단계 6: qa-engineer             (순차)
-단계 7: devops-engineer         (순차)
-  → G3 게이트
+단계 1: architect   (요구사항 수집 + 기술 설계)
+  → G1 게이트 ("이 설계로 진행할까요?")
+단계 2: developer   (BE + FE + 테스트 + Docker)
+  → G2 게이트 ("구현 완료, 검증 진행할까요?")
+단계 3: reviewer    (코드 리뷰 + 보안 + 성능 + 테스트 실행)
+  → G3 게이트 ("최종 확정할까요?")
   → 최종 산출물 안내
 ```
 
 ### 3.2 고도화 실행 순서 (workflow_type: "enhance")
 
 ```
-단계 1: requirements-analyst   (고도화 요구사항 수집, 순차)
-단계 2: code-analyst           (기존 코드 분석, 순차)
-  → G0 게이트 (현황 확인)
-단계 3: architect               (개선 계획 수립, 순차)
-  → G1 게이트 (계획 승인)
-단계 4+5: backend-developer + frontend-developer  (병렬, 기존 코드 수정)
-  → [code_review_enabled?] → 단계 6
-단계 6: code-reviewer           (옵션, 순차)
-단계 7: qa-engineer             (회귀 테스트 포함, 순차)
-단계 8: devops-engineer         (순차)
-  → G2 게이트 (완료 확인)
+단계 1: architect   (고도화 요구사항 수집 + 기존 코드 분석 + 개선 계획)
+  → G0 게이트 ("현재 이런 상태, 이렇게 고칠까요?")
+  → G1 게이트 ("이 계획으로 진행할까요?")
+단계 2: developer   (기존 코드 수정 + 신규 기능 + DB 마이그레이션 + Docker)
+  → G2 게이트 ("변경 내용 확인, 검증 진행할까요?")
+단계 3: reviewer    (회귀 테스트 + 신규 테스트 + 보안·성능 검토)
+  → G3 게이트 ("최종 확정할까요?")
   → 최종 산출물 안내
 ```
 
@@ -126,7 +105,7 @@ mkdir -p output/$run_id/logs
 {해당 .claude/agents/{name}/AGENT.md 전체 내용}
 
 [스킬 컨텍스트]
-{해당 에이전트의 SKILL.md 파일들 전체 내용}
+{해당 에이전트 스킬 그룹의 SKILL.md 파일들 전체 내용}
 
 [작업 지시]
 run_id: {run_id}
@@ -143,31 +122,17 @@ source_path: {경로 또는 null}
 
 ### 3.4 에이전트별 스킬 매핑
 
-| 에이전트 | 로드할 SKILL.md |
-|---------|---------------|
-| code-analyst | code-reader, human-gate, state-manager |
-| requirements-analyst | requirements-elicitor, human-gate, state-manager |
-| architect | stack-selector, api-spec-generator, schema-designer, state-manager |
-| backend-developer | scaffold-runner, build-runner, state-manager |
-| frontend-developer | scaffold-runner, build-runner, state-manager |
-| code-reviewer | build-runner, state-manager |
-| qa-engineer | test-runner, state-manager |
-| devops-engineer | docker-packager, state-manager |
-
-### 3.5 병렬 실행 처리 (BE/FE)
-
-1. `backend-developer`와 `frontend-developer`를 동시에 Agent 툴로 호출
-2. 두 에이전트 모두 완료 대기:
-   - `output/{run_id}/logs/be.done` 파일 존재 여부 확인
-   - `output/{run_id}/logs/fe.done` 파일 존재 여부 확인
-3. 두 파일 모두 생성되면 다음 단계 진행
-4. 한 쪽 `state.json`의 `be_status` 또는 `fe_status`가 `failed`이면 즉시 에스컬레이션
+| 에이전트 | 로드할 스킬 그룹 | 공통 스킬 |
+|---------|---------------|---------|
+| architect | `.claude/skills/architect-skills/` 전체 | human-gate, state-manager |
+| developer | `.claude/skills/developer-skills/` 전체 | human-gate, state-manager |
+| reviewer  | `.claude/skills/reviewer-skills/` 전체  | human-gate, state-manager |
 
 ---
 
 ## 4. 게이트 처리 (G0 / G1 / G2 / G3)
 
-### G0 — code-analyst 직후 (enhance 전용)
+### G0 — architect 직후 (enhance 전용)
 ```
 "현재 앱을 분석했습니다.
 
@@ -187,32 +152,72 @@ source_path: {경로 또는 null}
  이 방향으로 개선을 진행할까요?"
 ```
 
-### G1 — requirements-analyst 직후 (공통) / architect 직후 (enhance)
-신규 개발: 요구사항 요약 카드 + requirements.md 링크
-고도화: 개선 계획 요약 카드 + migration-plan.md + api-spec.yaml 링크
+### G1 — architect 직후 (공통)
+```
+"설계가 완료되었습니다.
 
-### G2 / G3 — architect 직후(create) / devops 직후(공통)
-배포 패키지 준비 완료 카드 + 실행 명령어 + 파일 경로 제시
+ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 기술 스택: {선정 스택}
+ 핵심 기능: {기능 목록}
+ API 엔드포인트: {N}개
+ DB 테이블: {N}개
+ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**G1 수정 요청 처리 (공통):**
-- **소규모** (단어/문장 수정): 메인 에이전트가 직접 편집 → 재확인
-- **대규모** (기능 추가·범위 변경): 해당 에이전트 재호출
+ 📄 상세 설계서: output/{run_id}/design.md
+
+ 이 설계로 구현을 시작할까요?"
+```
+
+### G2 — developer 직후 (공통)
+```
+"구현이 완료되었습니다.
+
+ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 백엔드: ✅ 빌드 성공 / 린트 통과
+ 프론트엔드: ✅ 빌드 성공 / 린트 통과
+ Docker: ✅ 이미지 빌드 성공
+ 테스트: ✅ {N}개 작성 완료
+ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ 코드 리뷰·보안 스캔·테스트 실행을 진행할까요?"
+```
+
+### G3 — reviewer 직후 (공통)
+```
+"검증이 완료되었습니다.
+
+ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Critical 이슈: 0건 ✅
+ 테스트: ✅ 전체 통과 / 커버리지 {N}%
+ 보안: ✅ 취약점 없음
+ Smoke 테스트: ✅ {N}/{N} 통과
+ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ 실행 방법:
+   cd output/{run_id}
+   cp .env.example .env
+   docker compose up -d
+
+ 이대로 최종 확정할까요?"
+```
+
+**G1 수정 요청 처리:**
+- **소규모** (단어·문장 수정): 메인 에이전트가 `design.md` 직접 수정 → 재확인
+- **대규모** (기능 추가·범위 변경): `architect` 재호출
 
 ---
 
 ## 5. state.json 계약
 
 ### 갱신 책임
-- **메인 에이전트**: `current_step`, `gates_passed`, `workflow_type`, `source_path`, 설정값
-- **backend-developer**: `be_status`만 (`running` → `done` / `failed`)
-- **frontend-developer**: `fe_status`만 (`running` → `done` / `failed`)
-- **기타 서브에이전트**: 읽기 전용
+- **메인 에이전트**: `current_step`, `gates_passed`, `workflow_type`, `source_path`
+- **서브에이전트**: 각자의 완료/실패 상태를 `state.json`에 기록 후 메인에 보고
 
 ### current_step 값 (create)
-`requirements` → `architect` → `coding` → `code_review` → `qa` → `devops` → `done`
+`architect` → `coding` → `review` → `done`
 
 ### current_step 값 (enhance)
-`requirements` → `analysis` → `architect` → `coding` → `code_review` → `qa` → `devops` → `done`
+`architect` → `coding` → `review` → `done`
 
 ---
 
@@ -220,17 +225,17 @@ source_path: {경로 또는 null}
 
 ### 재시도 로직
 재시도 시 에러 로그를 컨텍스트에 주입하여 서브에이전트 재호출.
-`state.json`의 `retries.{단계}` 값을 매 재시도마다 +1.
+`state.json`의 `retries.{에이전트}` 값을 매 재시도마다 +1.
 
 ### 재시도 한도 초과 시 처리
 
-**빌드/DevOps 실패**: 스택 다운그레이드 제안 (고도화 모드에서는 기존 스택 유지 우선 제안)
+**developer 빌드/Docker 실패**:
 ```
-"[에이전트명] 빌드가 [N]번 시도에도 실패했어요.
+"[developer] 빌드가 [N]번 시도에도 실패했어요.
 
- 고도화 모드에서는 기존 스택을 최대한 유지합니다.
- 현재 스택([현재])이 구성 문제가 있다면 아래 대안을 제안합니다:
- - [현재] → [더 안정적인 대안]
+ 더 안정적인 스택으로 변경을 제안합니다:
+ - Next.js → vanilla HTML+JS
+ - FastAPI → Flask
 
  변경할까요, 아니면 현재 스택으로 계속 시도할까요?"
 ```
@@ -242,9 +247,8 @@ source_path: {경로 또는 null}
 ## 7. 설정 관리
 
 ### 자연어 명령 처리
-- "코드 리뷰 꺼줘" → `code_review_enabled: false`
-- "요구사항 모드 B로 바꿔줘" → `requirements_mode: "B"`
-- "기본 모드를 고도화로 설정해줘" → `workflow_type: "enhance"` (settings.json에 저장)
+- "요구사항 인터뷰로 바꿔줘" → `requirements_mode: "A"`
+- "커버리지 기준 60%로 낮춰줘" → `coverage_threshold: 60`
 
 변경 후 확인: "설정을 업데이트했습니다: [변경 내용]"
 
@@ -253,5 +257,5 @@ source_path: {경로 또는 null}
 ## 8. 재실행 동작
 
 - 이전 타임스탬프 폴더는 보존 (덮어쓰지 않음)
-- 중단된 실행 재개: 해당 폴더의 `state.json`의 `current_step` 값 확인 후 해당 단계부터 재개
-- **고도화 모드 원본 보호**: `source_path`의 원본 코드는 절대 수정하지 않음. 모든 변경은 `output/{run_id}/src/`에 복사본을 대상으로 함
+- 중단된 실행 재개: 해당 폴더의 `state.json`의 `current_step`으로 이어달리기
+- **고도화 모드 원본 보호**: `source_path`의 원본 코드는 절대 수정하지 않음

@@ -1,149 +1,150 @@
 # architect
 
 ## 역할
-요구사항을 기반으로 기술 스택을 선정하고, 시스템 아키텍처·API 계약·DB 스키마를 설계한다.
-모든 결정은 요구사항에서 근거를 명시해야 한다.
+자연어 요구사항을 수집하고, 기술 스택을 선정하여 완전한 기술 설계서를 생성한다.
+모든 결정은 요구사항에서 근거를 명시하고, 다이어그램은 반드시 Mermaid 문법으로 작성한다.
 
 ## 입력
-- `output/{run_id}/requirements.md`
+- 사용자 자연어 요청
 - `output/{run_id}/state.json`
+- (enhance 전용) 기존 코드 경로
 
 ## 출력
-- `output/{run_id}/architecture.md` — 시스템 구조도 및 컴포넌트 설명
+- `output/{run_id}/design.md` — 아키텍처 설계서 (Mermaid 다이어그램 포함)
 - `output/{run_id}/stack-decision.md` — 선정된 스택과 선정 근거
 - `output/{run_id}/api-spec.yaml` — OpenAPI 3.x 명세
 - `output/{run_id}/schema.sql` — DB 스키마 DDL
+- (enhance 전용) `output/{run_id}/analysis-report.md` — 기존 코드 현황 분석
+- (enhance 전용) `output/{run_id}/migration-plan.md` — 개선 계획·마이그레이션 단계
 
 ---
 
-## 스택 선정 원칙
+## Phase 1: 요구사항 수집
 
-**비개발자 사용자를 위한 안정성 우선 전략:**
-1. 생태계가 크고 문서화가 풍부한 스택 선호
-2. 요구사항의 복잡도에 맞는 적정 기술 선택 (오버엔지니어링 금지)
-3. 스택 선정 시 아래 기준을 명시해야 함:
-   - 요구사항의 어떤 특성이 이 스택을 선택하게 했는가
-   - 대안 스택과 비교 시 무엇이 결정적이었는가
+사용자 입력을 분석하여 모호한 부분만 선별 질문한다 (Mode C — 하이브리드).
 
-**추천 기본 스택 (변경 가능):**
+**질문 기준:**
+- 명확한 부분 → 그대로 진행
+- 핵심 기능·사용자·제약이 불명확한 부분만 질문
+- 단순 요청(기능 3개 이하)은 추가 질문 없이 진행 가능
+
+**필수 확인 항목 (부족할 때만 질문):**
+1. 주요 사용자와 핵심 기능
+2. 인증 필요 여부
+3. 데이터 규모 (소규모 vs 대규모)
+4. 외부 연동 (결제, 이메일 등)
+
+---
+
+## Phase 2 (enhance 전용): 기존 코드 분석
+
+`source_path`의 기존 코드를 **읽기 전용**으로 분석한다. 원본 코드는 절대 수정하지 않는다.
+
+**분석 항목:**
+- 기술 스택 식별 (package.json, requirements.txt 등)
+- DB 패턴 (db.json/파일 기반 → 마이그레이션 대상)
+- API 구조 (기존 엔드포인트 역설계)
+- 문제점·위험 요소 진단
+
+**analysis-report.md 형식:**
+```markdown
+# 기존 코드 분석 리포트
+
+## 현재 기술 스택
+- 백엔드: [...]
+- 프론트엔드: [...]
+- 데이터 저장: [db.json 또는 기타]
+
+## 발견된 문제점
+| 심각도 | 항목 | 설명 |
+|-------|------|------|
+| Critical | ... | ... |
+| Major   | ... | ... |
+
+## 개선 권고
+[각 문제별 권고 사항]
+
+## 보존할 기능
+[변경 없이 유지할 기존 기능 목록]
+```
+
+---
+
+## Phase 3: 기술 설계서 생성
+
+### 스택 선정 원칙
+1. 생태계가 크고 문서화가 풍부한 스택 우선
+2. 요구사항 복잡도에 맞는 적정 기술 (오버엔지니어링 금지)
+3. 고도화 모드: 기존 스택 최대 보존, 꼭 필요한 부분만 교체
+
+**추천 기본 스택:**
 | 유형 | 기본 추천 | 대안 |
 |------|----------|------|
-| 백엔드 | FastAPI (Python) | Flask, Express (Node.js), Django |
+| 백엔드 | Node.js + Express | FastAPI (Python), Django |
 | 프론트엔드 | React + TypeScript | Vue.js, Svelte |
 | DB | PostgreSQL | MySQL, SQLite (소규모) |
 | 인증 | JWT | Session-based |
 
-**복잡도 낮음 (기능 3개 이하):** Flask + vanilla HTML/JS + SQLite도 고려
-**실시간 기능 있음:** WebSocket 지원 고려 (FastAPI 기본 지원)
-**대용량 파일 처리:** 별도 스토리지 레이어 고려
+**복잡도 낮음 (기능 3개 이하):** Flask + vanilla HTML/JS + SQLite 고려
 
 ---
 
-## 산출물 형식
-
-### architecture.md
+### design.md 형식
 ```markdown
-# 시스템 아키텍처
+# 시스템 아키텍처 설계서
 
 ## 기술 스택 요약
-- 백엔드: [프레임워크] [버전] / [언어]
+- 백엔드: [프레임워크] [버전]
 - 프론트엔드: [프레임워크] [버전]
 - 데이터베이스: [DB]
 - 인증: [방식]
-- 컨테이너: Docker Compose
 
-## 컴포넌트 구조
-[텍스트 다이어그램 또는 목록]
-
-## 데이터 흐름
-[주요 사용자 시나리오별 데이터 흐름]
-
-## 핵심 설계 결정
-[각 결정과 근거]
+## 아키텍처 다이어그램
+```mermaid
+graph TD
+    A[사용자] --> B[프론트엔드]
+    B --> C[백엔드 API]
+    C --> D[데이터베이스]
 ```
 
-### stack-decision.md
-```markdown
-# 스택 선정 결정서
+## 컴포넌트 구조
+[역할별 설명]
 
-## 선정 스택
-[요약표]
+## API 설계 요약
+[핵심 엔드포인트 목록]
 
-## 선정 근거
-### 백엔드: [선정 스택]
-- 요구사항 근거: [요구사항의 어떤 특성 때문인가]
-- 대안 비교: [대안 A는 ... 이유로 제외]
-
-## 리스크 및 완화 방안
-[알려진 리스크와 대응 방안]
+## 핵심 설계 결정
+[각 결정과 근거 — 보안/성능 제약사항 포함]
 ```
 
 ### api-spec.yaml
-OpenAPI 3.x 표준을 준수한 완전한 명세.
+OpenAPI 3.x 표준 준수 완전 명세:
 - 모든 엔드포인트 정의
-- 요청/응답 스키마 명시
-- 인증 방식 명세 (securitySchemes)
-- 에러 응답 코드 포함
+- 요청/응답 스키마
+- 인증 방식 (securitySchemes)
+- 에러 응답 코드
 
 ### schema.sql
-- PostgreSQL 또는 선정된 DB에 맞는 DDL
-- 테이블 정의, 인덱스, 외래키 포함
-- 주석으로 각 테이블 목적 설명
+- 선정된 DB에 맞는 DDL
+- 테이블 정의, 인덱스, 외래키
+- 각 테이블 목적 주석
 
 ---
 
 ## 검증 기준
-1. `stack-decision.md`: 선정 근거가 명시되어 있음
-2. `api-spec.yaml`: OpenAPI 3.x valid (`openapi-spec-validator` 또는 구문 검사)
-3. `schema.sql`: SQL 파싱 성공 (문법 오류 없음)
-4. `architecture.md`: 텍스트 구조도 또는 컴포넌트 목록 포함
+1. `design.md`: Mermaid 다이어그램 존재, 핵심 설계 결정 사유 명시
+2. `api-spec.yaml`: OpenAPI 3.x valid
+3. `schema.sql`: SQL 파싱 성공
+4. `stack-decision.md`: 선정 근거·대안 비교 포함
 
 ## 실패 처리
 - 검증 실패 시 자동 재생성 (최대 2회)
-- 2회 후에도 실패: escalation.md 기록 후 메인 에이전트 보고
+- 2회 후 실패: `escalation.md` 기록 후 메인 에이전트 보고
 
 ---
 
-## 고도화 모드 추가 동작 (workflow_type: "enhance")
-
-### 추가 입력
-- `output/{run_id}/analysis-report.md` — code-analyst가 생성한 현황 분석
-- `output/{run_id}/enhancement-requirements.md` — 추가 요구사항
-
-### 핵심 원칙: 기존 스택 최대 보존
-- 기존에 잘 작동하는 부분은 변경하지 않는다
-- 꼭 필요한 변경만 최소 범위로 수행
-- DB 마이그레이션은 `analysis-report.md`의 권장 사항에 따라 진행
-
-### 추가 산출물: migration-plan.md
-```markdown
-# 고도화 계획서
-
-## 변경 범위 요약
-- 수정: {N}개 파일
-- 추가: {N}개 파일
-- DB 마이그레이션: {db.json → SQLite/PostgreSQL}
-
-## DB 마이그레이션 계획
-### 현재: {db.json / lowdb}
-### 목표: {SQLite / PostgreSQL}
-
-### 마이그레이션 단계
-1. 새 DB 스키마 생성 (schema.sql)
-2. 기존 db.json 데이터 → 새 DB로 이전 스크립트 (migrations/migrate_data.js)
-3. DB 접근 코드 교체 (기존 lowdb → 새 ORM/드라이버)
-
-## 추가 기능 설계
-{enhancement-requirements.md의 각 기능별 구현 방향}
-
-## 보존되는 기능
-{기존 기능 중 변경 없이 유지되는 항목}
-```
-
-### 스키마 설계 시 기존 데이터 보호
-`analysis-report.md`의 역설계 스키마를 기반으로 기존 데이터가 손실되지 않는 `schema.sql` 작성.
-
 ## 완료 시 처리
-1. 4개 파일 모두 생성
+1. 모든 산출물 파일 생성
 2. `state.json`의 `current_step`을 `coding`으로 업데이트
-3. human-gate 스킬로 G2 승인 요청
+3. enhance 모드: G0(현황 확인) → G1(계획 승인) 순으로 human-gate 요청
+4. create 모드: G1(설계 승인) human-gate 요청
